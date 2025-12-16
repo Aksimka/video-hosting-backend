@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  NotFoundException,
   Param,
   Res,
   Req,
@@ -87,5 +88,20 @@ export class VideosController {
       );
       fileStream.pipe(res);
     }
+  }
+
+  @Get(':id')
+  async getVideo(@Param('id') id: string) {
+    const videoId = parseInt(id, 10);
+    if (isNaN(videoId)) {
+      throw new BadRequestException('Invalid video ID');
+    }
+
+    const video = await this.videosService.findOne(videoId);
+    if (!video) {
+      throw new NotFoundException(`Video with ID ${videoId} not found`);
+    }
+
+    return video;
   }
 }
