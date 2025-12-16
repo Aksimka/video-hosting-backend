@@ -1,6 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { Repository, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import * as fs from 'fs';
 import { Video } from './video.entity';
 import { VideoAsset } from 'src/videoAssets/videoAsset.entity';
 import { CreateVideoDto } from './dto/create-video.dto';
@@ -9,6 +15,19 @@ import { VideoStatus } from './enums/video-status.enum';
 import { VideoVisibility } from './enums/video-visibility.enum';
 import { VideoAssetsType } from 'src/videoAssets/enums/videoAssets-type.enum';
 import { VideoAssetsStatus } from 'src/videoAssets/enums/videoAssets-status.enum';
+
+export interface StreamRange {
+  start: number;
+  end: number;
+  chunkSize: number;
+}
+
+export interface StreamInfo {
+  filePath: string;
+  mimeType: string;
+  fileSize: number;
+  range?: StreamRange;
+}
 
 @Injectable()
 export class VideosService {
@@ -54,6 +73,101 @@ export class VideosService {
     }
 
     return video.video_asset;
+  }
+
+  async getStreamInfo(
+    videoId: number,
+    rangeHeader?: string,
+  ): Promise<StreamInfo> {
+    const videoAsset = await this.getVideoStreamInfo(videoId);
+
+    const assetObj = videoAsset as unknown as {
+      file_path: string;
+      mime_type: string;
+    };
+
+    const filePath = assetObj.file_path;
+    if (!filePath) {
+      throw new HttpException('Video file not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Проверяем существование файла
+    if (!fs.existsSync(filePath)) {
+      throw new HttpException('Video file not found', HttpStatus.NOT_FOUND);
+    }
+
+    const mimeType = assetObj.mime_type || 'video/mp4';
+
+    // Получаем статистику файла для проверки размера
+    const stats = fs.statSync(filePath);
+    const actualFileSize = stats.size;
+
+    const streamInfo: StreamInfo = {
+      filePath,
+      mimeType,
+      fileSize: actualFileSize,
+    };
+
+    // Если Range заголовок присутствует, парсим его
+    if (rangeHeader) {
+      const range = this.parseRangeHeader(rangeHeader, actualFileSize);
+      if (range) {
+        streamInfo.range = range;
+      }
+    }
+
+    return streamInfo;
+  }
+
+  private parseRangeHeader(
+    rangeHeader: string,
+    fileSize: number,
+  ): StreamRange | null {
+    // Парсим Range: bytes=start-end или bytes=start-
+    const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+    if (!rangeMatch) {
+      throw new HttpException(
+        'Invalid Range header',
+        HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
+      );
+    }
+
+    const start = parseInt(rangeMatch[1], 10);
+    const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : fileSize - 1;
+
+    // Валидация границ
+    if (
+      isNaN(start) ||
+      isNaN(end) ||
+      start < 0 ||
+      end >= fileSize ||
+      start > end
+    ) {
+      throw new HttpException(
+        'Range Not Satisfiable',
+        HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
+      );
+    }
+
+    // Вычисляем размер чанка
+    const chunkSize = end - start + 1;
+
+    return {
+      start,
+      end,
+      chunkSize,
+    };
+  }
+
+  createFileStream(
+    filePath: string,
+    start?: number,
+    end?: number,
+  ): fs.ReadStream {
+    if (start !== undefined && end !== undefined) {
+      return fs.createReadStream(filePath, { start, end });
+    }
+    return fs.createReadStream(filePath);
   }
 
   async createVideoWithAsset(
