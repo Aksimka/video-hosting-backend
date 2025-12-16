@@ -61,6 +61,12 @@ export class VideosController {
     // Устанавливаем общие заголовки
     res.setHeader('Content-Type', streamInfo.mimeType);
     res.setHeader('Accept-Ranges', 'bytes');
+    // CORS заголовки для стриминга
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader(
+      'Access-Control-Expose-Headers',
+      'Content-Range, Accept-Ranges, Content-Length',
+    );
 
     if (streamInfo.range) {
       // Range request - Partial Content
