@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Repository, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Video } from './video.entity';
@@ -31,6 +31,29 @@ export class VideosService {
 
   async remove(id: number): Promise<void> {
     await this.videosRepository.delete(id);
+  }
+
+  async getVideoStreamInfo(id: number): Promise<VideoAsset> {
+    const video = await this.videosRepository.findOne({
+      where: { id },
+      relations: ['video_asset'],
+    });
+
+    if (!video) {
+      throw new NotFoundException(`Video with ID ${id} not found`);
+    }
+
+    if (!video.video_asset) {
+      throw new NotFoundException(`Video asset for video ID ${id} not found`);
+    }
+
+    if (!video.video_asset.file_path) {
+      throw new NotFoundException(
+        `File path for video asset ID ${video.video_asset.id} not found`,
+      );
+    }
+
+    return video.video_asset;
   }
 
   async createVideoWithAsset(
