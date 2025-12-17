@@ -1,27 +1,22 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Video } from './videos/video.entity';
 import { DataSource } from 'typeorm';
 import { VideosModule } from './videos/videos.module';
 import { VideoAssetsModule } from './videoAssets/videoAssets.module';
-import { VideoAsset } from './videoAssets/videoAsset.entity';
+import { databaseConfig } from './database/database.config';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
     VideosModule,
     VideoAssetsModule,
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: 'postgres',
-      database: 'postgres',
-      entities: [Video, VideoAsset],
-      synchronize: true,
-    }),
+    TypeOrmModule.forRoot(databaseConfig),
   ],
   controllers: [AppController],
   providers: [AppService],
