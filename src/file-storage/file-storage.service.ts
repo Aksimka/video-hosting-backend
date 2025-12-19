@@ -11,8 +11,9 @@ export class FileStorageService {
   async saveFile(
     file: Express.Multer.File,
     destination?: string,
+    videoId?: number,
   ): Promise<SaveFileResult> {
-    return this.storage.saveFile(file, destination);
+    return this.storage.saveFile(file, destination, videoId);
   }
 
   async deleteFile(filePath: string): Promise<void> {

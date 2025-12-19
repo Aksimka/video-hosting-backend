@@ -12,4 +12,3 @@ export const databaseConfig: TypeOrmModuleOptions = {
   entities: [Video, VideoAsset],
   synchronize: process.env.DB_SYNCHRONIZE === 'true' || true,
 };
-

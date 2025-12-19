@@ -4,12 +4,14 @@ import {
   Column,
   OneToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { VideoAssetsType } from './enums/videoAssets-type.enum';
 import { VideoAssetsStatus } from './enums/videoAssets-status.enum';
 import { Video } from 'src/videos/video.entity';
 
 @Entity()
+@Index(['video_id', 'type'], { unique: true })
 export class VideoAsset {
   @PrimaryGeneratedColumn()
   id: number;

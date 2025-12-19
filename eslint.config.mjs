@@ -5,8 +5,21 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
+  // Глобальные игнорирования (должны быть первыми)
   {
-    ignores: ['eslint.config.mjs'],
+    ignores: [
+      'eslint.config.mjs',
+      'dist/**',
+      'node_modules/**',
+      // Игнорируем всю папку uploads и все её содержимое
+      'uploads/**',
+      '**/uploads/**',
+      // Игнорируем .ts файлы в uploads (сегменты видео)
+      'uploads/**/*.ts',
+      '**/uploads/**/*.ts',
+      // Игнорируем все файлы в uploads независимо от расширения
+      'uploads/**/*',
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

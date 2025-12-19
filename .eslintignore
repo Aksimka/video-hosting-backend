@@ -1,0 +1,12 @@
+# Build outputs
+dist/
+node_modules/
+
+# Uploads directory (contains video segments, not TypeScript source files)
+uploads/
+uploads/**
+**/uploads/**
+
+# Config files
+eslint.config.mjs
+

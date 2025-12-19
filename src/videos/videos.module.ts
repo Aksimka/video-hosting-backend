@@ -5,9 +5,14 @@ import { VideoAsset } from 'src/videoAssets/videoAsset.entity';
 import { VideosController } from './videos.controller';
 import { VideosService } from './videos.service';
 import { FileStorageModule } from 'src/file-storage/file-storage.module';
+import { VideoConverterModule } from 'src/video-converter/video-converter.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Video, VideoAsset]), FileStorageModule],
+  imports: [
+    TypeOrmModule.forFeature([Video, VideoAsset]),
+    FileStorageModule,
+    VideoConverterModule,
+  ],
   controllers: [VideosController],
   providers: [VideosService],
 })

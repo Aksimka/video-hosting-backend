@@ -7,10 +7,12 @@ import {
 import { Repository, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as fs from 'fs';
+import * as path from 'path';
 import { Video } from './video.entity';
 import { VideoAsset } from 'src/videoAssets/videoAsset.entity';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { FileStorageService } from 'src/file-storage/file-storage.service';
+import { VideoConverterService } from 'src/video-converter/video-converter.service';
 import { VideoStatus } from './enums/video-status.enum';
 import { VideoVisibility } from './enums/video-visibility.enum';
 import { VideoAssetsType } from 'src/videoAssets/enums/videoAssets-type.enum';
@@ -29,6 +31,13 @@ export interface StreamInfo {
   range?: StreamRange;
 }
 
+export interface HLSStreamInfo {
+  filePath: string;
+  mimeType: string;
+  fileSize: number;
+  range?: StreamRange;
+}
+
 @Injectable()
 export class VideosService {
   constructor(
@@ -38,6 +47,7 @@ export class VideosService {
     private videoAssetsRepository: Repository<VideoAsset>,
     private fileStorageService: FileStorageService,
     private dataSource: DataSource,
+    private videoConverterService: VideoConverterService,
   ) {}
 
   findAll(): Promise<Video[]> {
@@ -75,15 +85,29 @@ export class VideosService {
     return video.video_asset;
   }
 
+  async getHLSVideoAsset(videoId: number): Promise<VideoAsset | null> {
+    const hlsAsset = await this.videoAssetsRepository.findOne({
+      where: {
+        video_id: videoId,
+        type: VideoAssetsType.HLS_MASTER,
+      },
+    });
+
+    return hlsAsset;
+  }
+
   async getStreamInfo(
     videoId: number,
     rangeHeader?: string,
   ): Promise<StreamInfo> {
-    const videoAsset = await this.getVideoStreamInfo(videoId);
+    // Сначала проверяем наличие HLS версии
+    const hlsAsset = await this.getHLSVideoAsset(videoId);
+    const videoAsset = hlsAsset || (await this.getVideoStreamInfo(videoId));
 
     const assetObj = videoAsset as unknown as {
       file_path: string;
       mime_type: string;
+      type: VideoAssetsType;
     };
 
     const filePath = assetObj.file_path;
@@ -96,7 +120,13 @@ export class VideosService {
       throw new HttpException('Video file not found', HttpStatus.NOT_FOUND);
     }
 
-    const mimeType = assetObj.mime_type || 'video/mp4';
+    // Определяем MIME тип в зависимости от типа ассета
+    let mimeType = assetObj.mime_type;
+    if (assetObj.type === VideoAssetsType.HLS_MASTER) {
+      mimeType = 'application/vnd.apple.mpegurl';
+    } else {
+      mimeType = mimeType || 'video/mp4';
+    }
 
     // Получаем статистику файла для проверки размера
     const stats = fs.statSync(filePath);
@@ -159,6 +189,40 @@ export class VideosService {
     };
   }
 
+  private parseRangeHeaderSoft(
+    rangeHeader: string,
+    fileSize: number,
+  ): StreamRange | null {
+    // Мягкий парсинг Range для HLS (не выбрасывает исключения)
+    const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+    if (!rangeMatch) {
+      return null;
+    }
+
+    const start = parseInt(rangeMatch[1], 10);
+    const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : fileSize - 1;
+
+    // Валидация границ (возвращаем null при ошибке вместо исключения)
+    if (
+      isNaN(start) ||
+      isNaN(end) ||
+      start < 0 ||
+      end >= fileSize ||
+      start > end
+    ) {
+      return null;
+    }
+
+    // Вычисляем размер чанка
+    const chunkSize = end - start + 1;
+
+    return {
+      start,
+      end,
+      chunkSize,
+    };
+  }
+
   createFileStream(
     filePath: string,
     start?: number,
@@ -170,6 +234,102 @@ export class VideosService {
     return fs.createReadStream(filePath);
   }
 
+  async getHLSStreamInfo(
+    videoId: number,
+    fileRequest: string,
+    rangeHeader?: string,
+  ): Promise<HLSStreamInfo> {
+    const hlsAsset = await this.getHLSVideoAsset(videoId);
+
+    if (!hlsAsset) {
+      throw new NotFoundException('HLS stream not found');
+    }
+
+    const assetObj = hlsAsset as unknown as {
+      file_path: string;
+    };
+
+    if (!assetObj.file_path) {
+      throw new NotFoundException('HLS stream not found');
+    }
+
+    // Определяем путь к запрашиваемому файлу
+    const masterPlaylistDir = path.dirname(assetObj.file_path);
+    let filePath: string;
+
+    // Извлекаем имя файла из запроса
+    const fileName = fileRequest.split('/').pop() || fileRequest;
+
+    if (fileName === 'master.m3u8' || fileRequest.includes('master.m3u8')) {
+      // Запрос master.m3u8
+      filePath = assetObj.file_path;
+    } else if (fileName.endsWith('.m3u8')) {
+      // Запрос конкретного плейлиста (например, 360p.m3u8)
+      filePath = path.join(masterPlaylistDir, fileName);
+    } else if (fileName.endsWith('.ts')) {
+      // Запрос сегмента .ts
+      const segmentsDir = path.join(masterPlaylistDir, 'segments');
+      filePath = path.join(segmentsDir, fileName);
+    } else {
+      // По умолчанию возвращаем master.m3u8
+      filePath = assetObj.file_path;
+    }
+
+    // Проверяем существование файла
+    if (!fs.existsSync(filePath)) {
+      throw new NotFoundException('HLS file not found');
+    }
+
+    const stats = fs.statSync(filePath);
+    const fileSize = stats.size;
+
+    // Определяем MIME тип
+    const mimeType = filePath.endsWith('.m3u8')
+      ? 'application/vnd.apple.mpegurl'
+      : 'video/mp2t';
+
+    const hlsStreamInfo: HLSStreamInfo = {
+      filePath,
+      mimeType,
+      fileSize,
+    };
+
+    // Для .ts файлов парсим Range заголовок (мягкая валидация)
+    if (rangeHeader && filePath.endsWith('.ts')) {
+      const range = this.parseRangeHeaderSoft(rangeHeader, fileSize);
+      if (range) {
+        hlsStreamInfo.range = range;
+      }
+    }
+
+    return hlsStreamInfo;
+  }
+
+  async getStreamRequestInfo(
+    videoId: number,
+    url: string,
+    queryFile?: string,
+  ): Promise<{ isHLS: boolean; fileRequest?: string }> {
+    const hlsAsset = await this.getHLSVideoAsset(videoId);
+
+    if (!hlsAsset) {
+      return { isHLS: false };
+    }
+
+    // Определяем запрашиваемый файл или используем master.m3u8 по умолчанию
+    let fileRequest = 'master.m3u8'; // По умолчанию master.m3u8
+
+    if (queryFile) {
+      // Если указан файл в query параметре
+      fileRequest = queryFile;
+    } else if (url.includes('.m3u8') || url.includes('.ts')) {
+      // Если файл указан в URL
+      fileRequest = url.split('/').pop() || 'master.m3u8';
+    }
+
+    return { isHLS: true, fileRequest };
+  }
+
   async createVideoWithAsset(
     file: Express.Multer.File,
     createVideoDto: CreateVideoDto,
@@ -178,14 +338,7 @@ export class VideosService {
 
     return await this.dataSource.transaction(async (manager) => {
       try {
-        // 1. Сохранить файл
-        const saveResult = await this.fileStorageService.saveFile(
-          file,
-          'videos',
-        );
-        savedFilePath = saveResult.path;
-
-        // 2. Создать Video
+        // 1. Создать Video (нужен ID для структуры папок)
         const video = manager.create(Video, {
           title: createVideoDto.title,
           description: createVideoDto.description,
@@ -195,6 +348,14 @@ export class VideosService {
         });
 
         const savedVideo = await manager.save(Video, video);
+
+        // 2. Сохранить файл в структуру uploads/videos/{videoId}/source/
+        const saveResult = await this.fileStorageService.saveFile(
+          file,
+          'videos',
+          savedVideo.id,
+        );
+        savedFilePath = saveResult.path;
 
         // 3. Создать VideoAsset
         const videoAsset = manager.create(VideoAsset, {
@@ -206,14 +367,26 @@ export class VideosService {
           size_bytes: saveResult.size,
         });
 
-        await manager.save(VideoAsset, videoAsset);
+        const savedVideoAsset = await manager.save(VideoAsset, videoAsset);
 
         // 4. Вернуть Video с загруженным video_asset
         const videoRepository = manager.getRepository(Video);
-        return await videoRepository.findOne({
+        const result = await videoRepository.findOne({
           where: { id: savedVideo.id },
           relations: ['video_asset'],
         });
+
+        // 5. Запускаем асинхронную конвертацию в HLS (не блокируем ответ)
+        this.videoConverterService
+          .convertToHLS(savedVideo.id, saveResult.path, savedVideoAsset.id)
+          .catch((error) => {
+            console.error(
+              `Failed to convert video ${savedVideo.id} to HLS:`,
+              error,
+            );
+          });
+
+        return result;
       } catch (error) {
         // При ошибке удаляем сохраненный файл
         if (savedFilePath) {

@@ -31,10 +31,20 @@ export class S3FileStorageService implements IFileStorage {
   async saveFile(
     file: Express.Multer.File,
     destination?: string,
+    videoId?: number,
   ): Promise<SaveFileResult> {
     const fileExtension = file.originalname.split('.').pop();
     const uniqueFilename = `${uuidv4()}.${fileExtension}`;
-    const key = destination ? `${destination}/${uniqueFilename}` : uniqueFilename;
+    
+    // Формируем путь: {destination}/{videoId}/source/{filename} или {destination}/{filename}
+    let key: string;
+    if (videoId && destination) {
+      key = `${destination}/${videoId}/source/${uniqueFilename}`;
+    } else if (destination) {
+      key = `${destination}/${uniqueFilename}`;
+    } else {
+      key = uniqueFilename;
+    }
 
     await this.s3Client.send(
       new PutObjectCommand({

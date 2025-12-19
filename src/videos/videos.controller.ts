@@ -40,6 +40,7 @@ export class VideosController {
     return this.videosService.createVideoWithAsset(file, createVideoDto);
   }
 
+  // Более специфичный роут должен быть перед общим :id
   @Get(':id/stream')
   async streamVideo(
     @Param('id') id: string,
@@ -51,8 +52,60 @@ export class VideosController {
       throw new BadRequestException('Invalid video ID');
     }
 
-    // Получаем информацию о стриме из сервиса
     const rangeHeader = req.headers.range;
+    const url = req.url;
+    const queryFile = req.query.file as string | undefined;
+
+    // Определяем тип запроса (HLS или обычный стриминг)
+    const requestInfo = await this.videosService.getStreamRequestInfo(
+      videoId,
+      url,
+      queryFile,
+    );
+
+    if (requestInfo.isHLS) {
+      // Обработка HLS запросов
+      const hlsStreamInfo = await this.videosService.getHLSStreamInfo(
+        videoId,
+        requestInfo.fileRequest || 'master.m3u8',
+        rangeHeader,
+      );
+
+      // Устанавливаем заголовки для HLS
+      res.setHeader('Content-Type', hlsStreamInfo.mimeType);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+
+      if (hlsStreamInfo.range) {
+        // Range request для .ts файла
+        const { start, end, chunkSize } = hlsStreamInfo.range;
+        res.setHeader(
+          'Content-Range',
+          `bytes ${start}-${end}/${hlsStreamInfo.fileSize}`,
+        );
+        res.setHeader('Content-Length', chunkSize);
+        res.status(HttpStatus.PARTIAL_CONTENT);
+
+        const fileStream = this.videosService.createFileStream(
+          hlsStreamInfo.filePath,
+          start,
+          end,
+        );
+        fileStream.pipe(res);
+      } else {
+        // Полный файл (.m3u8 или .ts без Range)
+        res.setHeader('Content-Length', hlsStreamInfo.fileSize);
+        res.status(HttpStatus.OK);
+
+        const fileStream = this.videosService.createFileStream(
+          hlsStreamInfo.filePath,
+        );
+        fileStream.pipe(res);
+      }
+      return;
+    }
+
+    // Обычный стриминг (mp4 или другой формат)
     const streamInfo = await this.videosService.getStreamInfo(
       videoId,
       rangeHeader,
@@ -61,7 +114,6 @@ export class VideosController {
     // Устанавливаем общие заголовки
     res.setHeader('Content-Type', streamInfo.mimeType);
     res.setHeader('Accept-Ranges', 'bytes');
-    // CORS заголовки для стриминга
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader(
       'Access-Control-Expose-Headers',
@@ -91,6 +143,130 @@ export class VideosController {
 
       const fileStream = this.videosService.createFileStream(
         streamInfo.filePath,
+      );
+      fileStream.pipe(res);
+    }
+  }
+
+  // Обработка сегментов HLS в подпапке segments
+  // Пример: /videos/5/segments/0_000.ts
+  @Get(':id/segments/:filename')
+  async streamHLSSegment(
+    @Param('id') id: string,
+    @Param('filename') filename: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const videoId = parseInt(id, 10);
+    if (isNaN(videoId)) {
+      throw new BadRequestException('Invalid video ID');
+    }
+
+    // Проверяем, что это .ts файл
+    if (!filename.endsWith('.ts')) {
+      throw new NotFoundException('Invalid segment file');
+    }
+
+    const rangeHeader = req.headers.range;
+
+    // Используем существующую логику для получения HLS файла
+    const hlsStreamInfo = await this.videosService.getHLSStreamInfo(
+      videoId,
+      filename,
+      rangeHeader,
+    );
+
+    // Устанавливаем заголовки для HLS сегмента
+    res.setHeader('Content-Type', hlsStreamInfo.mimeType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+
+    if (hlsStreamInfo.range) {
+      // Range request для .ts файла
+      const { start, end, chunkSize } = hlsStreamInfo.range;
+      res.setHeader(
+        'Content-Range',
+        `bytes ${start}-${end}/${hlsStreamInfo.fileSize}`,
+      );
+      res.setHeader('Content-Length', chunkSize);
+      res.status(HttpStatus.PARTIAL_CONTENT);
+
+      const fileStream = this.videosService.createFileStream(
+        hlsStreamInfo.filePath,
+        start,
+        end,
+      );
+      fileStream.pipe(res);
+    } else {
+      // Полный файл (.ts без Range)
+      res.setHeader('Content-Length', hlsStreamInfo.fileSize);
+      res.status(HttpStatus.OK);
+
+      const fileStream = this.videosService.createFileStream(
+        hlsStreamInfo.filePath,
+      );
+      fileStream.pipe(res);
+    }
+  }
+
+  // Обработка прямых запросов к HLS файлам от Video.js
+  // Примеры: /videos/5/0.m3u8, /videos/5/master.m3u8
+  @Get(':id/:filename')
+  async streamHLSFile(
+    @Param('id') id: string,
+    @Param('filename') filename: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const videoId = parseInt(id, 10);
+    if (isNaN(videoId)) {
+      throw new BadRequestException('Invalid video ID');
+    }
+
+    // Проверяем, что это HLS файл
+    if (!filename.endsWith('.m3u8') && !filename.endsWith('.ts')) {
+      // Если это не HLS файл, передаем управление следующему роуту
+      // Но так как это последний специфичный роут, вернем 404
+      throw new NotFoundException('File not found');
+    }
+
+    const rangeHeader = req.headers.range;
+
+    // Используем существующую логику для получения HLS файла
+    const hlsStreamInfo = await this.videosService.getHLSStreamInfo(
+      videoId,
+      filename,
+      rangeHeader,
+    );
+
+    // Устанавливаем заголовки для HLS
+    res.setHeader('Content-Type', hlsStreamInfo.mimeType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+
+    if (hlsStreamInfo.range) {
+      // Range request для .ts файла
+      const { start, end, chunkSize } = hlsStreamInfo.range;
+      res.setHeader(
+        'Content-Range',
+        `bytes ${start}-${end}/${hlsStreamInfo.fileSize}`,
+      );
+      res.setHeader('Content-Length', chunkSize);
+      res.status(HttpStatus.PARTIAL_CONTENT);
+
+      const fileStream = this.videosService.createFileStream(
+        hlsStreamInfo.filePath,
+        start,
+        end,
+      );
+      fileStream.pipe(res);
+    } else {
+      // Полный файл (.m3u8 или .ts без Range)
+      res.setHeader('Content-Length', hlsStreamInfo.fileSize);
+      res.status(HttpStatus.OK);
+
+      const fileStream = this.videosService.createFileStream(
+        hlsStreamInfo.filePath,
       );
       fileStream.pipe(res);
     }

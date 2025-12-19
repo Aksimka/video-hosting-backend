@@ -28,6 +28,7 @@ export class LocalFileStorageService implements IFileStorage {
   async saveFile(
     file: Express.Multer.File,
     destination?: string,
+    videoId?: number,
   ): Promise<SaveFileResult> {
     // Проверяем структуру файла и извлекаем свойства безопасно
     const fileObj = file as unknown as {
@@ -47,9 +48,20 @@ export class LocalFileStorageService implements IFileStorage {
       throw new Error('Invalid file object');
     }
 
-    const destinationDir = destination
-      ? path.join(this.uploadsDir, destination)
-      : this.uploadsDir;
+    // Формируем путь: uploads/{destination}/{videoId}/source/
+    let destinationDir: string;
+    if (videoId && destination) {
+      destinationDir = path.join(
+        this.uploadsDir,
+        destination,
+        String(videoId),
+        'source',
+      );
+    } else if (destination) {
+      destinationDir = path.join(this.uploadsDir, destination);
+    } else {
+      destinationDir = this.uploadsDir;
+    }
 
     // Создаём директорию, если её нет
     await fs.mkdir(destinationDir, { recursive: true });
