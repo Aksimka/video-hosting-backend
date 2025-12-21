@@ -17,6 +17,7 @@ import { VideoStatus } from './enums/video-status.enum';
 import { VideoVisibility } from './enums/video-visibility.enum';
 import { VideoAssetsType } from 'src/videoAssets/enums/videoAssets-type.enum';
 import { VideoAssetsStatus } from 'src/videoAssets/enums/videoAssets-status.enum';
+import { VideoConverterResolution } from 'src/video-converter/enums/video-converter-resolution.enum';
 
 export interface StreamRange {
   start: number;
@@ -238,6 +239,7 @@ export class VideosService {
     videoId: number,
     fileRequest: string,
     rangeHeader?: string,
+    resolution?: string,
   ): Promise<HLSStreamInfo> {
     const hlsAsset = await this.getHLSVideoAsset(videoId);
 
@@ -264,11 +266,34 @@ export class VideosService {
       // Запрос master.m3u8
       filePath = assetObj.file_path;
     } else if (fileName.endsWith('.m3u8')) {
-      // Запрос конкретного плейлиста (например, 360p.m3u8)
+      // Запрос конкретного плейлиста
+      // FFmpeg создает плейлисты как 0.m3u8, 1.m3u8 в корне hls
+      // Ищем плейлист в корне hls (независимо от разрешения)
       filePath = path.join(masterPlaylistDir, fileName);
     } else if (fileName.endsWith('.ts')) {
       // Запрос сегмента .ts
-      const segmentsDir = path.join(masterPlaylistDir, 'segments');
+      // Сегменты хранятся в папках по разрешениям: hls/{resolution}/segments/
+      let resolutionName: string | undefined;
+
+      if (resolution) {
+        // Если разрешение указано в URL, используем его
+        resolutionName = resolution;
+      } else {
+        // Если разрешение не указано, используем 360p по умолчанию
+        resolutionName = VideoConverterResolution.RESOLUTION_360P;
+      }
+
+      if (!resolutionName) {
+        throw new NotFoundException(
+          'HLS file not found: resolution not determined',
+        );
+      }
+
+      const segmentsDir = path.join(
+        masterPlaylistDir,
+        resolutionName,
+        'segments',
+      );
       filePath = path.join(segmentsDir, fileName);
     } else {
       // По умолчанию возвращаем master.m3u8

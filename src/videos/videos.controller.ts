@@ -17,6 +17,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response, Request } from 'express';
 import { VideosService } from './videos.service';
 import { CreateVideoDto } from './dto/create-video.dto';
+import { generateResolutionIndexMap } from 'src/video-converter/utils/generateOutputOptions';
+import { VideoConverterResolution } from 'src/video-converter/enums/video-converter-resolution.enum';
 
 @Controller('videos')
 export class VideosController {
@@ -148,10 +150,10 @@ export class VideosController {
     }
   }
 
-  // Обработка сегментов HLS в подпапке segments
-  // Пример: /videos/5/segments/0_000.ts
+  // Обработка сегментов HLS без указания разрешения (по умолчанию 360p)
+  // Пример: /videos/5/segments/000.ts
   @Get(':id/segments/:filename')
-  async streamHLSSegment(
+  async streamHLSSegmentDefault(
     @Param('id') id: string,
     @Param('filename') filename: string,
     @Req() req: Request,
@@ -168,12 +170,14 @@ export class VideosController {
     }
 
     const rangeHeader = req.headers.range;
+    const defaultResolution = VideoConverterResolution.RESOLUTION_360P;
 
-    // Используем существующую логику для получения HLS файла
+    // Используем существующую логику для получения HLS файла с разрешением по умолчанию
     const hlsStreamInfo = await this.videosService.getHLSStreamInfo(
       videoId,
       filename,
       rangeHeader,
+      defaultResolution,
     );
 
     // Устанавливаем заголовки для HLS сегмента
@@ -209,6 +213,129 @@ export class VideosController {
     }
   }
 
+  // Обработка сегментов HLS с указанием разрешения в URL
+  // Пример: /videos/5/360p/segments/000.ts
+  @Get(':id/:resolution/segments/:filename')
+  async streamHLSSegmentWithResolution(
+    @Param('id') id: string,
+    @Param('resolution') resolution: string,
+    @Param('filename') filename: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const videoId = parseInt(id, 10);
+    if (isNaN(videoId)) {
+      throw new BadRequestException('Invalid video ID');
+    }
+
+    // Валидируем разрешение
+    const resolutionIndexMap = generateResolutionIndexMap();
+    const validResolutions = Array.from(resolutionIndexMap.values());
+    if (!validResolutions.includes(resolution)) {
+      throw new BadRequestException(`Invalid resolution: ${resolution}`);
+    }
+
+    // Проверяем, что это .ts файл
+    if (!filename.endsWith('.ts')) {
+      throw new NotFoundException('Invalid segment file');
+    }
+
+    const rangeHeader = req.headers.range;
+
+    // Используем существующую логику для получения HLS файла с указанным разрешением
+    const hlsStreamInfo = await this.videosService.getHLSStreamInfo(
+      videoId,
+      filename,
+      rangeHeader,
+      resolution,
+    );
+
+    // Устанавливаем заголовки для HLS сегмента
+    res.setHeader('Content-Type', hlsStreamInfo.mimeType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+
+    if (hlsStreamInfo.range) {
+      // Range request для .ts файла
+      const { start, end, chunkSize } = hlsStreamInfo.range;
+      res.setHeader(
+        'Content-Range',
+        `bytes ${start}-${end}/${hlsStreamInfo.fileSize}`,
+      );
+      res.setHeader('Content-Length', chunkSize);
+      res.status(HttpStatus.PARTIAL_CONTENT);
+
+      const fileStream = this.videosService.createFileStream(
+        hlsStreamInfo.filePath,
+        start,
+        end,
+      );
+      fileStream.pipe(res);
+    } else {
+      // Полный файл (.ts без Range)
+      res.setHeader('Content-Length', hlsStreamInfo.fileSize);
+      res.status(HttpStatus.OK);
+
+      const fileStream = this.videosService.createFileStream(
+        hlsStreamInfo.filePath,
+      );
+      fileStream.pipe(res);
+    }
+  }
+
+  // Обработка плейлистов конкретного разрешения
+  // Пример: /videos/5/360p/playlist.m3u8 или /videos/5/360p/0.m3u8
+  @Get(':id/:resolution/:filename')
+  async streamHLSPlaylistWithResolution(
+    @Param('id') id: string,
+    @Param('resolution') resolution: string,
+    @Param('filename') filename: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<void> {
+    const videoId = parseInt(id, 10);
+    if (isNaN(videoId)) {
+      throw new BadRequestException('Invalid video ID');
+    }
+
+    // Проверяем, что resolution не является зарезервированным словом
+    if (resolution === 'stream') {
+      throw new NotFoundException('Invalid resolution');
+    }
+
+    // Валидируем разрешение
+    const resolutionIndexMap = generateResolutionIndexMap();
+    const validResolutions = Array.from(resolutionIndexMap.values());
+    if (!validResolutions.includes(resolution)) {
+      throw new BadRequestException(`Invalid resolution: ${resolution}`);
+    }
+
+    // Проверяем, что это .m3u8 файл
+    if (!filename.endsWith('.m3u8')) {
+      throw new NotFoundException('Invalid playlist file');
+    }
+
+    // Используем существующую логику для получения HLS файла
+    const hlsStreamInfo = await this.videosService.getHLSStreamInfo(
+      videoId,
+      filename,
+      undefined,
+      resolution,
+    );
+
+    // Устанавливаем заголовки для HLS плейлиста
+    res.setHeader('Content-Type', hlsStreamInfo.mimeType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Content-Length', hlsStreamInfo.fileSize);
+    res.status(HttpStatus.OK);
+
+    const fileStream = this.videosService.createFileStream(
+      hlsStreamInfo.filePath,
+    );
+    fileStream.pipe(res);
+  }
+
   // Обработка прямых запросов к HLS файлам от Video.js
   // Примеры: /videos/5/0.m3u8, /videos/5/master.m3u8
   @Get(':id/:filename')
@@ -232,11 +359,18 @@ export class VideosController {
 
     const rangeHeader = req.headers.range;
 
+    // Определяем разрешение по умолчанию для .ts файлов
+    let defaultResolution: string | undefined;
+    if (filename.endsWith('.ts')) {
+      defaultResolution = VideoConverterResolution.RESOLUTION_360P;
+    }
+
     // Используем существующую логику для получения HLS файла
     const hlsStreamInfo = await this.videosService.getHLSStreamInfo(
       videoId,
       filename,
       rangeHeader,
+      defaultResolution,
     );
 
     // Устанавливаем заголовки для HLS
