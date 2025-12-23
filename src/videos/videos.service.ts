@@ -7,7 +7,6 @@ import {
 import { Repository, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as fs from 'fs';
-import * as path from 'path';
 import { Video } from './video.entity';
 import { VideoAsset } from 'src/videoAssets/videoAsset.entity';
 import { CreateVideoDto } from './dto/create-video.dto';
@@ -17,13 +16,14 @@ import { VideoStatus } from './enums/video-status.enum';
 import { VideoVisibility } from './enums/video-visibility.enum';
 import { VideoAssetsType } from 'src/videoAssets/enums/videoAssets-type.enum';
 import { VideoAssetsStatus } from 'src/videoAssets/enums/videoAssets-status.enum';
-import { VideoConverterResolution } from 'src/video-converter/enums/video-converter-resolution.enum';
+import {
+  parseRangeHeader,
+  parseRangeHeaderSoft,
+  type StreamRange,
+} from './utils/range-parser.util';
+import { resolveHLSPath } from './utils/hls-path.util';
 
-export interface StreamRange {
-  start: number;
-  end: number;
-  chunkSize: number;
-}
+export type { StreamRange } from './utils/range-parser.util';
 
 export interface StreamInfo {
   filePath: string;
@@ -141,87 +141,13 @@ export class VideosService {
 
     // Если Range заголовок присутствует, парсим его
     if (rangeHeader) {
-      const range = this.parseRangeHeader(rangeHeader, actualFileSize);
+      const range = parseRangeHeader(rangeHeader, actualFileSize);
       if (range) {
         streamInfo.range = range;
       }
     }
 
     return streamInfo;
-  }
-
-  private parseRangeHeader(
-    rangeHeader: string,
-    fileSize: number,
-  ): StreamRange | null {
-    // Парсим Range: bytes=start-end или bytes=start-
-    const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-    if (!rangeMatch) {
-      throw new HttpException(
-        'Invalid Range header',
-        HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
-      );
-    }
-
-    const start = parseInt(rangeMatch[1], 10);
-    const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : fileSize - 1;
-
-    // Валидация границ
-    if (
-      isNaN(start) ||
-      isNaN(end) ||
-      start < 0 ||
-      end >= fileSize ||
-      start > end
-    ) {
-      throw new HttpException(
-        'Range Not Satisfiable',
-        HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
-      );
-    }
-
-    // Вычисляем размер чанка
-    const chunkSize = end - start + 1;
-
-    return {
-      start,
-      end,
-      chunkSize,
-    };
-  }
-
-  private parseRangeHeaderSoft(
-    rangeHeader: string,
-    fileSize: number,
-  ): StreamRange | null {
-    // Мягкий парсинг Range для HLS (не выбрасывает исключения)
-    const rangeMatch = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-    if (!rangeMatch) {
-      return null;
-    }
-
-    const start = parseInt(rangeMatch[1], 10);
-    const end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : fileSize - 1;
-
-    // Валидация границ (возвращаем null при ошибке вместо исключения)
-    if (
-      isNaN(start) ||
-      isNaN(end) ||
-      start < 0 ||
-      end >= fileSize ||
-      start > end
-    ) {
-      return null;
-    }
-
-    // Вычисляем размер чанка
-    const chunkSize = end - start + 1;
-
-    return {
-      start,
-      end,
-      chunkSize,
-    };
   }
 
   createFileStream(
@@ -255,50 +181,12 @@ export class VideosService {
       throw new NotFoundException('HLS stream not found');
     }
 
-    // Определяем путь к запрашиваемому файлу
-    const masterPlaylistDir = path.dirname(assetObj.file_path);
-    let filePath: string;
-
-    // Извлекаем имя файла из запроса
-    const fileName = fileRequest.split('/').pop() || fileRequest;
-
-    if (fileName === 'master.m3u8' || fileRequest.includes('master.m3u8')) {
-      // Запрос master.m3u8
-      filePath = assetObj.file_path;
-    } else if (fileName.endsWith('.m3u8')) {
-      // Запрос конкретного плейлиста
-      // FFmpeg создает плейлисты как 0.m3u8, 1.m3u8 в корне hls
-      // Ищем плейлист в корне hls (независимо от разрешения)
-      filePath = path.join(masterPlaylistDir, fileName);
-    } else if (fileName.endsWith('.ts')) {
-      // Запрос сегмента .ts
-      // Сегменты хранятся в папках по разрешениям: hls/{resolution}/segments/
-      let resolutionName: string | undefined;
-
-      if (resolution) {
-        // Если разрешение указано в URL, используем его
-        resolutionName = resolution;
-      } else {
-        // Если разрешение не указано, используем 360p по умолчанию
-        resolutionName = VideoConverterResolution.RESOLUTION_360P;
-      }
-
-      if (!resolutionName) {
-        throw new NotFoundException(
-          'HLS file not found: resolution not determined',
-        );
-      }
-
-      const segmentsDir = path.join(
-        masterPlaylistDir,
-        resolutionName,
-        'segments',
-      );
-      filePath = path.join(segmentsDir, fileName);
-    } else {
-      // По умолчанию возвращаем master.m3u8
-      filePath = assetObj.file_path;
-    }
+    // Определяем путь к запрашиваемому файлу используя утилиту
+    const filePath = resolveHLSPath(
+      assetObj.file_path,
+      fileRequest,
+      resolution,
+    );
 
     // Проверяем существование файла
     if (!fs.existsSync(filePath)) {
@@ -321,7 +209,7 @@ export class VideosService {
 
     // Для .ts файлов парсим Range заголовок (мягкая валидация)
     if (rangeHeader && filePath.endsWith('.ts')) {
-      const range = this.parseRangeHeaderSoft(rangeHeader, fileSize);
+      const range = parseRangeHeaderSoft(rangeHeader, fileSize);
       if (range) {
         hlsStreamInfo.range = range;
       }
