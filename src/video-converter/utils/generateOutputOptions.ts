@@ -1,7 +1,7 @@
-import path from 'path';
 import { SUPPORTED_RESOLUTIONS } from '../config/resolutions.config';
 import { RESOLUTIONS_DATA } from '../constants/resolutionsData.constants';
 import { VideoConverterResolution } from '../enums/video-converter-resolution.enum';
+import { joinPaths } from 'src/common/utils/path.util';
 
 /**
  * Генерирует маппинг индексов разрешений на их названия на основе SUPPORTED_RESOLUTIONS
@@ -54,14 +54,14 @@ export const generateOutputOptions = (
   for (let index = 0; index <= maxIndex; index++) {
     const resolutionName = resolutionIndexMap.get(index);
     if (resolutionName) {
-      const resolutionSegmentsDir = path.join(
+      const resolutionSegmentsDir = joinPaths(
         hlsDir,
         resolutionName,
         'segments',
       );
       segmentFilenames.push(
         `-hls_segment_filename`,
-        path.join(resolutionSegmentsDir, '%03d.ts'),
+        joinPaths(resolutionSegmentsDir, '%03d.ts'),
       );
     }
   }

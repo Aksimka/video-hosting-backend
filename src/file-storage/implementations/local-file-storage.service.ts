@@ -4,8 +4,19 @@ import {
   SaveFileResult,
 } from '../interfaces/file-storage.interface';
 import * as fs from 'fs/promises';
-import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  ensureDirectory,
+  createDirectory,
+  fileExists as checkFileExists,
+} from 'src/common/utils/file-system.util';
+import {
+  joinPaths,
+  getFileExtension,
+  getRelativePath,
+  normalizeWebPath,
+  resolvePath,
+} from 'src/common/utils/path.util';
 
 @Injectable()
 export class LocalFileStorageService implements IFileStorage {
@@ -13,16 +24,12 @@ export class LocalFileStorageService implements IFileStorage {
 
   constructor() {
     // Можно вынести в конфигурацию через ConfigModule
-    this.uploadsDir = path.join(process.cwd(), 'uploads');
+    this.uploadsDir = resolvePath(process.cwd(), 'uploads');
     void this.ensureUploadsDirectory();
   }
 
   private async ensureUploadsDirectory(): Promise<void> {
-    try {
-      await fs.access(this.uploadsDir);
-    } catch {
-      await fs.mkdir(this.uploadsDir, { recursive: true });
-    }
+    await ensureDirectory(this.uploadsDir);
   }
 
   async saveFile(
@@ -51,25 +58,25 @@ export class LocalFileStorageService implements IFileStorage {
     // Формируем путь: uploads/{destination}/{videoId}/source/
     let destinationDir: string;
     if (videoId && destination) {
-      destinationDir = path.join(
+      destinationDir = joinPaths(
         this.uploadsDir,
         destination,
         String(videoId),
         'source',
       );
     } else if (destination) {
-      destinationDir = path.join(this.uploadsDir, destination);
+      destinationDir = joinPaths(this.uploadsDir, destination);
     } else {
       destinationDir = this.uploadsDir;
     }
 
     // Создаём директорию, если её нет
-    await fs.mkdir(destinationDir, { recursive: true });
+    await createDirectory(destinationDir);
 
     // Генерируем уникальное имя файла
-    const fileExtension = path.extname(fileObj.originalname);
+    const fileExtension = getFileExtension(fileObj.originalname);
     const uniqueFilename = `${uuidv4()}${fileExtension}`;
-    const filePath = path.join(destinationDir, uniqueFilename);
+    const filePath = joinPaths(destinationDir, uniqueFilename);
 
     // Сохраняем файл
     await fs.writeFile(filePath, fileObj.buffer);
@@ -96,16 +103,11 @@ export class LocalFileStorageService implements IFileStorage {
   getFileUrl(filePath: string): Promise<string> {
     // Для локального хранилища возвращаем относительный путь
     // В production можно настроить статический сервер или CDN
-    const relativePath = path.relative(this.uploadsDir, filePath);
-    return Promise.resolve(`/uploads/${relativePath.replace(/\\/g, '/')}`);
+    const relativePath = getRelativePath(this.uploadsDir, filePath);
+    return Promise.resolve(`/uploads/${normalizeWebPath(relativePath)}`);
   }
 
   async fileExists(filePath: string): Promise<boolean> {
-    try {
-      await fs.access(filePath);
-      return true;
-    } catch {
-      return false;
-    }
+    return checkFileExists(filePath);
   }
 }

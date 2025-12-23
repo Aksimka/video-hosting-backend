@@ -3,10 +3,10 @@ import {
   NotFoundException,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Repository, DataSource } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import * as fs from 'fs';
 import { Video } from './video.entity';
 import { VideoAsset } from 'src/videoAssets/videoAsset.entity';
 import { CreateVideoDto } from './dto/create-video.dto';
@@ -22,6 +22,12 @@ import {
   type StreamRange,
 } from './utils/range-parser.util';
 import { resolveHLSPath } from './utils/hls-path.util';
+import {
+  fileExistsSync,
+  getFileStatsSync,
+} from 'src/common/utils/file-system.util';
+import { getHLSMimeType } from 'src/common/utils/mime-type.util';
+import * as fs from 'fs';
 
 export type { StreamRange } from './utils/range-parser.util';
 
@@ -41,6 +47,8 @@ export interface HLSStreamInfo {
 
 @Injectable()
 export class VideosService {
+  private readonly logger = new Logger(VideosService.name);
+
   constructor(
     @InjectRepository(Video)
     private videosRepository: Repository<Video>,
@@ -117,7 +125,7 @@ export class VideosService {
     }
 
     // Проверяем существование файла
-    if (!fs.existsSync(filePath)) {
+    if (!fileExistsSync(filePath)) {
       throw new HttpException('Video file not found', HttpStatus.NOT_FOUND);
     }
 
@@ -130,7 +138,7 @@ export class VideosService {
     }
 
     // Получаем статистику файла для проверки размера
-    const stats = fs.statSync(filePath);
+    const stats = getFileStatsSync(filePath);
     const actualFileSize = stats.size;
 
     const streamInfo: StreamInfo = {
@@ -189,17 +197,15 @@ export class VideosService {
     );
 
     // Проверяем существование файла
-    if (!fs.existsSync(filePath)) {
+    if (!fileExistsSync(filePath)) {
       throw new NotFoundException('HLS file not found');
     }
 
-    const stats = fs.statSync(filePath);
+    const stats = getFileStatsSync(filePath);
     const fileSize = stats.size;
 
     // Определяем MIME тип
-    const mimeType = filePath.endsWith('.m3u8')
-      ? 'application/vnd.apple.mpegurl'
-      : 'video/mp2t';
+    const mimeType = getHLSMimeType(filePath);
 
     const hlsStreamInfo: HLSStreamInfo = {
       filePath,
@@ -293,7 +299,7 @@ export class VideosService {
         this.videoConverterService
           .convertToHLS(savedVideo.id, saveResult.path, savedVideoAsset.id)
           .catch((error) => {
-            console.error(
+            this.logger.error(
               `Failed to convert video ${savedVideo.id} to HLS:`,
               error,
             );
@@ -307,7 +313,10 @@ export class VideosService {
             await this.fileStorageService.deleteFile(savedFilePath);
           } catch (deleteError) {
             // Логируем ошибку удаления, но не прерываем процесс
-            console.error('Failed to delete file after error:', deleteError);
+            this.logger.error(
+              'Failed to delete file after error:',
+              deleteError,
+            );
           }
         }
         throw error;

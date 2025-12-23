@@ -2,9 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import ffmpeg from 'fluent-ffmpeg';
-import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
-import * as path from 'path';
 import { VideoAsset } from 'src/videoAssets/videoAsset.entity';
 import { VideoAssetsType } from 'src/videoAssets/enums/videoAssets-type.enum';
 import { VideoAssetsStatus } from 'src/videoAssets/enums/videoAssets-status.enum';
@@ -13,6 +11,12 @@ import {
   splitVarStreamMapOption,
   generateResolutionIndexMap,
 } from './utils/generateOutputOptions';
+import {
+  ensureDirectory,
+  createDirectory,
+  fileExists,
+} from 'src/common/utils/file-system.util';
+import { getDirectory, joinPaths } from 'src/common/utils/path.util';
 
 @Injectable()
 export class VideoConverterService {
@@ -50,25 +54,27 @@ export class VideoConverterService {
     sourceAssetId: number,
   ): Promise<void> {
     // Структура: uploads/videos/{videoId}/hls/
-    const videoDir = path.dirname(path.dirname(sourceFilePath)); // uploads/videos/{videoId}
-    const hlsDir = path.join(videoDir, 'hls');
+    const videoDir = getDirectory(getDirectory(sourceFilePath)); // uploads/videos/{videoId}
+    const hlsDir = joinPaths(videoDir, 'hls');
     // Сегменты будут храниться в папках по разрешениям: hls/{resolution}/segments/
 
     try {
       // Создаем базовую директорию для HLS файлов
-      await fs.mkdir(hlsDir, { recursive: true });
+      await ensureDirectory(hlsDir);
 
       // Путь к master.m3u8
-      const masterPlaylistPath = path.join(hlsDir, 'master.m3u8');
+      const masterPlaylistPath = joinPaths(hlsDir, 'master.m3u8');
 
       // Конвертируем видео в HLS с несколькими битрейтами
       await this.convertVideoToHLS(sourceFilePath, hlsDir);
 
       // Проверяем, что master.m3u8 создан
-      await fs.access(masterPlaylistPath);
+      if (!(await fileExists(masterPlaylistPath))) {
+        throw new Error('Master playlist was not created');
+      }
 
       // Получаем размер master.m3u8
-      const stats = await fs.stat(masterPlaylistPath);
+      const stats = await fsSync.promises.stat(masterPlaylistPath);
       const mimeType = 'application/vnd.apple.mpegurl';
 
       // Создаем или обновляем VideoAsset с типом HLS_MASTER
@@ -181,9 +187,9 @@ export class VideoConverterService {
 
     // Создаем папки для каждого разрешения перед запуском FFmpeg
     for (const resolutionName of resolutionIndexMap.values()) {
-      const resolutionDir = path.join(hlsDir, resolutionName);
-      const resolutionSegmentsDir = path.join(resolutionDir, 'segments');
-      await fs.mkdir(resolutionSegmentsDir, { recursive: true });
+      const resolutionDir = joinPaths(hlsDir, resolutionName);
+      const resolutionSegmentsDir = joinPaths(resolutionDir, 'segments');
+      await createDirectory(resolutionSegmentsDir);
     }
 
     return new Promise((resolve, reject) => {
@@ -197,7 +203,7 @@ export class VideoConverterService {
       command
         .outputOptions(optionsWithoutVarStreamMap)
         .outputOption('-var_stream_map', varStreamMapValue)
-        .output(path.join(hlsDir, '%v.m3u8'))
+        .output(joinPaths(hlsDir, '%v.m3u8'))
         .on('start', (commandLine: string) => {
           this.logger.log(`FFmpeg started: ${commandLine}`);
           const resolutionsList = Array.from(resolutionIndexMap.values()).join(
