@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { VideosModule } from './videos/videos.module';
 import { VideoAssetsModule } from './videoAssets/videoAssets.module';
+import { VideoProxyModule } from './video-proxy/video-proxy.module';
 import { databaseConfig } from './database/database.config';
 
 @Module({
@@ -16,6 +17,7 @@ import { databaseConfig } from './database/database.config';
     }),
     VideosModule,
     VideoAssetsModule,
+    VideoProxyModule,
     TypeOrmModule.forRoot(databaseConfig),
   ],
   controllers: [AppController],
