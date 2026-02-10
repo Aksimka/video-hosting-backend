@@ -1,5 +1,9 @@
 import { VideoConverterResolution } from 'src/video-converter/enums/video-converter-resolution.enum';
-import { getDirectory, getFileName, joinPaths } from 'src/common/utils/path.util';
+import {
+  getDirectory,
+  getFileName,
+  joinPaths,
+} from 'src/common/utils/path.util';
 
 /**
  * Определяет путь к HLS файлу на основе типа запроса
@@ -42,4 +46,3 @@ export function resolveHLSPath(
   // По умолчанию возвращаем master.m3u8
   return masterPlaylistPath;
 }
-

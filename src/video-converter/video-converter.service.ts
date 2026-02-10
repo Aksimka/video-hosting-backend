@@ -82,7 +82,7 @@ export class VideoConverterService {
       // Поэтому проверяем существование и обновляем или создаем соответственно
       await this.dataSource.transaction(async (manager) => {
         // Проверяем, есть ли уже какой-либо VideoAsset для этого видео
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
         const existingAsset = await manager.query(
           `
           SELECT id, type FROM video_asset 

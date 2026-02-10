@@ -10,6 +10,9 @@ export interface IVideoProxyStrategy {
    * @param res - Express Response объект
    * @param params - Дополнительные параметры (например, ID видео)
    */
-  proxyVideo(req: Request, res: Response, params: Record<string, string>): Promise<void>;
+  proxyVideo(
+    req: Request,
+    res: Response,
+    params: Record<string, string>,
+  ): Promise<void>;
 }
-

@@ -33,11 +33,7 @@ export function sendHLSResponse(
     res.setHeader('Content-Length', chunkSize);
     res.status(HttpStatus.PARTIAL_CONTENT);
 
-    const fileStream = createFileStream(
-      hlsStreamInfo.filePath,
-      start,
-      end,
-    );
+    const fileStream = createFileStream(hlsStreamInfo.filePath, start, end);
     fileStream.pipe(res);
   } else {
     // Полный файл (.m3u8 или .ts без Range)
@@ -48,4 +44,3 @@ export function sendHLSResponse(
     fileStream.pipe(res);
   }
 }
-

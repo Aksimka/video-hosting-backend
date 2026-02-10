@@ -1,0 +1,71 @@
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseIntPipe,
+  Post,
+} from '@nestjs/common';
+import { VideoParserService } from './video-parser.service';
+import { ParseCategoryDto } from './dto/parse-category.dto';
+import { ParseVideoPageDto } from './dto/parse-video-page.dto';
+
+@Controller('video-parser')
+export class VideoParserController {
+  constructor(private readonly videoParserService: VideoParserService) {}
+
+  /**
+   * Парсит категорию и сохраняет найденные видео в БД.
+   * По желанию может сразу гидрировать каждую страницу видео.
+   */
+  @Post('categories/parse')
+  @HttpCode(HttpStatus.OK)
+  async parseCategory(@Body() dto: ParseCategoryDto) {
+    return this.videoParserService.parseCategory(
+      dto.url,
+      dto.pages ?? 1,
+      dto.hydrateVideos ?? false,
+    );
+  }
+
+  /**
+   * Парсит одну страницу видео, сохраняет unified-данные, теги и источники.
+   */
+  @Post('videos/parse')
+  @HttpCode(HttpStatus.OK)
+  async parseVideo(@Body() dto: ParseVideoPageDto) {
+    return this.videoParserService.parseAndStoreVideo(dto.url, {
+      categoryUrl: dto.categoryUrl,
+      forceRefreshSources: dto.forceRefreshSources ?? true,
+    });
+  }
+
+  /**
+   * Возвращает рабочую прямую ссылку на видео.
+   * Если ссылка протухла/скоро протухнет, обновляет её on-demand.
+   */
+  @Get('videos/:id/playable')
+  async getPlayableVideo(@Param('id', ParseIntPipe) id: number) {
+    return this.videoParserService.getPlayableVideoSource(id);
+  }
+
+  /**
+   * Форсирует обновление источников для конкретного видео.
+   */
+  @Post('videos/:id/refresh')
+  @HttpCode(HttpStatus.OK)
+  async refreshVideo(@Param('id', ParseIntPipe) id: number) {
+    return this.videoParserService.refreshVideoSources(id, 'manual-endpoint');
+  }
+
+  /**
+   * Ручной запуск фонового обновления протухающих ссылок.
+   */
+  @Post('videos/refresh-expiring')
+  @HttpCode(HttpStatus.OK)
+  async refreshExpiringVideos() {
+    return this.videoParserService.refreshExpiringSourcesBatch();
+  }
+}

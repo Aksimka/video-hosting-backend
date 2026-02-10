@@ -9,4 +9,3 @@ import { VkVideoProxyStrategy } from './strategies/vk-video-proxy.strategy';
   exports: [VideoProxyService],
 })
 export class VideoProxyModule {}
-

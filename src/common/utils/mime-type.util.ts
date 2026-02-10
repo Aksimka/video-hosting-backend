@@ -1,10 +1,7 @@
 /**
  * Определяет MIME тип на основе расширения файла или типа контента
  */
-export function getMimeType(
-  filePath: string,
-  contentType?: string,
-): string {
+export function getMimeType(filePath: string, contentType?: string): string {
   // Если передан явный тип контента, используем его
   if (contentType) {
     return contentType;
@@ -54,4 +51,3 @@ export function getHLSMimeType(filePath: string): string {
   }
   return getMimeType(filePath);
 }
-

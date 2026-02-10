@@ -44,4 +44,3 @@ export async function ensureDirectory(dirPath: string): Promise<void> {
 export async function createDirectory(dirPath: string): Promise<void> {
   await fsPromises.mkdir(dirPath, { recursive: true });
 }
-

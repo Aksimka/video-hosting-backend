@@ -48,4 +48,3 @@ export function resolvePath(...paths: string[]): string {
 export function normalizeWebPath(filePath: string): string {
   return filePath.replace(/\\/g, '/');
 }
-

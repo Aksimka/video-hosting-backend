@@ -31,4 +31,3 @@ export function validateResolution(resolution: string): boolean {
 
   return true;
 }
-
