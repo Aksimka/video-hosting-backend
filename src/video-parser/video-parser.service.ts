@@ -6,7 +6,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThanOrEqual, IsNull } from 'typeorm';
+import { Repository, LessThanOrEqual, IsNull, In } from 'typeorm';
 import { IVideoParserStrategy } from './interfaces/video-parser-strategy.interface';
 import { ParsedVideo } from './entities/parsed-video.entity';
 import { ParsedVideoSource } from './entities/parsed-video-source.entity';
@@ -54,6 +54,7 @@ export class VideoParserService {
     itemsFound: number;
     itemsPersisted: number;
     itemsHydrated: number;
+    itemsFailed: number;
     items: ParsedVideoCategoryItem[];
   }> {
     const strategy = this.getStrategyForUrl(categoryUrl);
@@ -75,20 +76,23 @@ export class VideoParserService {
 
     let itemsPersisted = 0;
     let itemsHydrated = 0;
+    let itemsFailed = 0;
 
     if (hydrateVideos) {
       for (const item of items) {
-        await this.parseAndStoreVideo(item.pageUrl, {
-          categoryUrl,
-          forceRefreshSources: false,
-        });
-        itemsPersisted += 1;
-        itemsHydrated += 1;
-      }
-    } else {
-      for (const item of items) {
-        await this.upsertCategoryItem(strategy, item, categoryUrl);
-        itemsPersisted += 1;
+        try {
+          await this.parseAndStoreVideo(item.pageUrl, {
+            categoryUrl,
+            forceRefreshSources: false,
+          });
+          itemsPersisted += 1;
+          itemsHydrated += 1;
+        } catch (error) {
+          itemsFailed += 1;
+          this.logger.error(
+            `Failed to hydrate video ${item.pageUrl}: ${String(error)}`,
+          );
+        }
       }
     }
 
@@ -99,6 +103,7 @@ export class VideoParserService {
       itemsFound: items.length,
       itemsPersisted,
       itemsHydrated,
+      itemsFailed,
       items,
     };
   }
@@ -112,6 +117,14 @@ export class VideoParserService {
   ): Promise<ParsedVideo> {
     const strategy = this.getStrategyForUrl(videoUrl);
     const parsedVideo = await strategy.parseVideo(videoUrl);
+
+    if (!parsedVideo.playerSourceUrl) {
+      this.logger.error(`PLAYER source not found for ${videoUrl}`);
+      throw new BadRequestException(
+        `Player source is required for parsed video: ${videoUrl}`,
+      );
+    }
+
     if (options?.categoryUrl) {
       parsedVideo.categoryUrl = options.categoryUrl;
     }
@@ -186,6 +199,24 @@ export class VideoParserService {
       refreshed: false,
       sourceStatus: directSource.status,
     };
+  }
+
+  async findParsedVideos(limit = 50, offset = 0): Promise<ParsedVideo[]> {
+    return this.parsedVideoRepository.find({
+      relations: ['sources'],
+      order: { updated_at: 'DESC' },
+      take: Math.max(1, Math.min(limit, 200)),
+      skip: Math.max(0, offset),
+    });
+  }
+
+  async getParsedVideoWithTags(videoId: number): Promise<{
+    video: ParsedVideo;
+    tags: ParserTag[];
+  }> {
+    const video = await this.findParsedVideoById(videoId);
+    const tags = await this.getTagsForParsedVideo(video);
+    return { video, tags };
   }
 
   async refreshVideoSources(
@@ -420,6 +451,12 @@ export class VideoParserService {
     parsedVideo: ParsedVideoData,
     existingVideo?: ParsedVideo,
   ): Promise<ParsedVideo> {
+    if (!parsedVideo.playerSourceUrl) {
+      throw new BadRequestException(
+        `Player source is required for parsed video: ${parsedVideo.pageUrl}`,
+      );
+    }
+
     const foundVideo =
       existingVideo ||
       (await this.parsedVideoRepository.findOne({
@@ -541,66 +578,6 @@ export class VideoParserService {
     return this.findParsedVideoById(savedVideo.id);
   }
 
-  private async upsertCategoryItem(
-    strategy: IVideoParserStrategy,
-    item: ParsedVideoCategoryItem,
-    categoryUrl: string,
-  ): Promise<void> {
-    const site = this.resolveSiteByStrategy(strategy);
-
-    const existingVideo = await this.parsedVideoRepository.findOne({
-      where: {
-        site,
-        page_url: item.pageUrl,
-      },
-    });
-
-    if (existingVideo) {
-      existingVideo.title = item.title || existingVideo.title;
-      existingVideo.duration_seconds =
-        item.durationSeconds ?? existingVideo.duration_seconds;
-      existingVideo.thumbnail_url =
-        item.thumbnailUrl || existingVideo.thumbnail_url;
-      existingVideo.category_url = categoryUrl;
-      existingVideo.media_id = item.mediaId || existingVideo.media_id;
-      existingVideo.last_checked_at = new Date();
-      await this.parsedVideoRepository.save(existingVideo);
-      return;
-    }
-
-    const created = this.parsedVideoRepository.create({
-      site,
-      page_url: item.pageUrl,
-      category_url: categoryUrl,
-      media_id: item.mediaId || null,
-      title: item.title || item.pageUrl,
-      duration_seconds: item.durationSeconds ?? null,
-      thumbnail_url: item.thumbnailUrl || null,
-      needs_refresh: true,
-      last_checked_at: new Date(),
-    });
-
-    const saved = await this.parsedVideoRepository.save(created);
-
-    await this.upsertSource(saved.id, {
-      type: ParserVideoSourceType.PAGE,
-      url: item.pageUrl,
-      status: ParserSourceStatus.ACTIVE,
-      expiresAt: null,
-      lastError: null,
-    });
-
-    if (item.thumbnailUrl) {
-      await this.upsertSource(saved.id, {
-        type: ParserVideoSourceType.THUMBNAIL,
-        url: item.thumbnailUrl,
-        status: ParserSourceStatus.ACTIVE,
-        expiresAt: null,
-        lastError: null,
-      });
-    }
-  }
-
   private async syncVideoTags(
     video: ParsedVideo,
     tags: ParsedTagData[],
@@ -685,6 +662,27 @@ export class VideoParserService {
     pageUrl: string,
   ): string {
     return `${site}|${pageUrl}`;
+  }
+
+  private async getTagsForParsedVideo(
+    video: ParsedVideo,
+  ): Promise<ParserTag[]> {
+    const externalKey = this.buildExternalVideoKey(video.site, video.page_url);
+    const links = await this.parserVideoTagRepository.find({
+      where: {
+        site: video.site,
+        video_external_key: externalKey,
+      },
+    });
+
+    if (links.length === 0) {
+      return [];
+    }
+
+    const tagIds = links.map((link) => link.tag_id);
+    return this.parserTagRepository.findBy({
+      id: In(tagIds),
+    });
   }
 
   private async upsertSource(

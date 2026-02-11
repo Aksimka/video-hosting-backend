@@ -7,6 +7,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import { VideoParserService } from './video-parser.service';
 import { ParseCategoryDto } from './dto/parse-category.dto';
@@ -40,6 +41,27 @@ export class VideoParserController {
       categoryUrl: dto.categoryUrl,
       forceRefreshSources: dto.forceRefreshSources ?? true,
     });
+  }
+
+  /**
+   * Возвращает список успешно распарсенных видео (с источниками).
+   */
+  @Get('parsed-videos')
+  async getParsedVideos(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : 50;
+    const parsedOffset = offset ? parseInt(offset, 10) : 0;
+    return this.videoParserService.findParsedVideos(parsedLimit, parsedOffset);
+  }
+
+  /**
+   * Возвращает детальную карточку распарсенного видео для админки.
+   */
+  @Get('parsed-videos/:id')
+  async getParsedVideoById(@Param('id', ParseIntPipe) id: number) {
+    return this.videoParserService.getParsedVideoWithTags(id);
   }
 
   /**

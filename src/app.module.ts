@@ -10,6 +10,8 @@ import { VideoProxyModule } from './video-proxy/video-proxy.module';
 import { VideoParserModule } from './video-parser/video-parser.module';
 import { databaseConfig } from './database/database.config';
 import { tagsDatabaseConfig } from './database/tags-database.config';
+import { PublishedVideosModule } from './published-videos/published-videos.module';
+import { PublicVideosModule } from './public-videos/public-videos.module';
 
 @Module({
   imports: [
@@ -21,6 +23,8 @@ import { tagsDatabaseConfig } from './database/tags-database.config';
     VideoAssetsModule,
     VideoProxyModule,
     VideoParserModule,
+    PublishedVideosModule,
+    PublicVideosModule,
     TypeOrmModule.forRoot(databaseConfig),
     TypeOrmModule.forRoot(tagsDatabaseConfig),
   ],
