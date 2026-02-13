@@ -12,6 +12,8 @@ import { ParsedVideo } from './entities/parsed-video.entity';
 import { ParsedVideoSource } from './entities/parsed-video-source.entity';
 import { ParserTag } from './entities/parser-tag.entity';
 import { ParserVideoTag } from './entities/parser-video-tag.entity';
+import { RawTagMapping } from 'src/tag-governance/entities/raw-tag-mapping.entity';
+import { RawTagMappingStatus } from 'src/tag-governance/enums/raw-tag-mapping-status.enum';
 import { ParserVideoSourceType } from './enums/parser-video-source-type.enum';
 import { ParserSourceStatus } from './enums/parser-source-status.enum';
 import { ParserTagType } from './enums/parser-tag-type.enum';
@@ -38,6 +40,8 @@ export class VideoParserService {
     private readonly parserTagRepository: Repository<ParserTag>,
     @InjectRepository(ParserVideoTag, 'tags')
     private readonly parserVideoTagRepository: Repository<ParserVideoTag>,
+    @InjectRepository(RawTagMapping, 'tags')
+    private readonly rawTagMappingRepository: Repository<RawTagMapping>,
     private readonly sexStudentkiStrategy: SexStudentkiVideoParserStrategy,
   ) {
     this.strategies = [sexStudentkiStrategy];
@@ -655,6 +659,38 @@ export class VideoParserService {
     );
 
     await this.parserVideoTagRepository.save(links);
+    await this.ensureRawTagMappings(tagIds);
+  }
+
+  private async ensureRawTagMappings(rawTagIds: number[]): Promise<void> {
+    const uniqueTagIds = Array.from(new Set(rawTagIds)).filter((id) => id > 0);
+    if (uniqueTagIds.length === 0) {
+      return;
+    }
+
+    const existing = await this.rawTagMappingRepository.find({
+      where: {
+        raw_tag_id: In(uniqueTagIds),
+      },
+      select: ['raw_tag_id'],
+    });
+
+    const existingIds = new Set(existing.map((item) => item.raw_tag_id));
+    const toCreate = uniqueTagIds.filter((id) => !existingIds.has(id));
+
+    if (toCreate.length === 0) {
+      return;
+    }
+
+    await this.rawTagMappingRepository.save(
+      toCreate.map((rawTagId) =>
+        this.rawTagMappingRepository.create({
+          raw_tag_id: rawTagId,
+          status: RawTagMappingStatus.UNMAPPED,
+          canonical_tag_id: null,
+        }),
+      ),
+    );
   }
 
   private buildExternalVideoKey(

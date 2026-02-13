@@ -12,6 +12,7 @@ import { UpdatePublishedVideoDto } from './dto/update-published-video.dto';
 import { ParsedVideoSource } from 'src/video-parser/entities/parsed-video-source.entity';
 import { ParserVideoSourceType } from 'src/video-parser/enums/parser-video-source-type.enum';
 import { PublishedVideoStatus } from './enums/published-video-status.enum';
+import { TagGovernanceService } from 'src/tag-governance/tag-governance.service';
 
 @Injectable()
 export class PublishedVideosService {
@@ -20,11 +21,16 @@ export class PublishedVideosService {
     private readonly publishedVideosRepository: Repository<PublishedVideo>,
     @InjectRepository(ParsedVideo)
     private readonly parsedVideosRepository: Repository<ParsedVideo>,
+    private readonly tagGovernanceService: TagGovernanceService,
   ) {}
 
   async createFromParsed(
     dto: CreatePublishedVideoDto,
   ): Promise<PublishedVideo> {
+    await this.tagGovernanceService.assertParsedVideoReadyForPublish(
+      dto.parsedVideoId,
+    );
+
     const { parsedVideo, playerSource, directSource } =
       await this.getParsedVideoForPublish(dto.parsedVideoId);
 
@@ -95,6 +101,11 @@ export class PublishedVideosService {
       video.timeline_sprite_template_url = dto.timelineSpriteTemplateUrl;
     }
     if (dto.status !== undefined) {
+      if (dto.status === PublishedVideoStatus.PUBLISHED) {
+        await this.tagGovernanceService.assertParsedVideoReadyForPublish(
+          video.parsed_video_id,
+        );
+      }
       video.status = dto.status;
       if (
         dto.status === PublishedVideoStatus.PUBLISHED &&

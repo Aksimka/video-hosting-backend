@@ -8,11 +8,15 @@ import { ParserTag } from './entities/parser-tag.entity';
 import { ParserVideoTag } from './entities/parser-video-tag.entity';
 import { SexStudentkiVideoParserStrategy } from './strategies/sex-studentki-video-parser.strategy';
 import { VideoParserRefreshScheduler } from './scheduler/video-parser-refresh.scheduler';
+import { RawTagMapping } from 'src/tag-governance/entities/raw-tag-mapping.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ParsedVideo, ParsedVideoSource]),
-    TypeOrmModule.forFeature([ParserTag, ParserVideoTag], 'tags'),
+    TypeOrmModule.forFeature(
+      [ParserTag, ParserVideoTag, RawTagMapping],
+      'tags',
+    ),
   ],
   controllers: [VideoParserController],
   providers: [

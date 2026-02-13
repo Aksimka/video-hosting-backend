@@ -12,6 +12,7 @@ import { databaseConfig } from './database/database.config';
 import { tagsDatabaseConfig } from './database/tags-database.config';
 import { PublishedVideosModule } from './published-videos/published-videos.module';
 import { PublicVideosModule } from './public-videos/public-videos.module';
+import { TagGovernanceModule } from './tag-governance/tag-governance.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { PublicVideosModule } from './public-videos/public-videos.module';
     VideoParserModule,
     PublishedVideosModule,
     PublicVideosModule,
+    TagGovernanceModule,
     TypeOrmModule.forRoot(databaseConfig),
     TypeOrmModule.forRoot(tagsDatabaseConfig),
   ],
