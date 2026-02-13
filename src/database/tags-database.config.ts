@@ -5,6 +5,10 @@ import { CanonicalTag } from 'src/tag-governance/entities/canonical-tag.entity';
 import { RawTagMapping } from 'src/tag-governance/entities/raw-tag-mapping.entity';
 import { Category } from 'src/tag-governance/entities/category.entity';
 import { CategoryCanonicalTag } from 'src/tag-governance/entities/category-canonical-tag.entity';
+import { RawModel } from 'src/tag-governance/entities/raw-model.entity';
+import { VideoRawModel } from 'src/tag-governance/entities/video-raw-model.entity';
+import { CanonicalModel } from 'src/tag-governance/entities/canonical-model.entity';
+import { RawModelMapping } from 'src/tag-governance/entities/raw-model-mapping.entity';
 
 export const tagsDatabaseConfig: TypeOrmModuleOptions = {
   name: 'tags',
@@ -24,6 +28,10 @@ export const tagsDatabaseConfig: TypeOrmModuleOptions = {
     RawTagMapping,
     Category,
     CategoryCanonicalTag,
+    RawModel,
+    VideoRawModel,
+    CanonicalModel,
+    RawModelMapping,
   ],
   synchronize:
     process.env.TAGS_DB_SYNCHRONIZE === 'true' ||

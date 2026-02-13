@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { IVideoParserStrategy } from '../interfaces/video-parser-strategy.interface';
 import {
   ParsedCategoryResult,
+  ParsedModelData,
   ParsedTagData,
   ParsedVideoData,
 } from '../interfaces/parsed-video-data.interface';
@@ -72,13 +73,17 @@ export class SexStudentkiVideoParserStrategy implements IVideoParserStrategy {
       this.matchSingle(html, /<link rel="canonical" href="([^"]+)"/i) ||
       normalizedVideoUrl;
 
+    const h1RawTitle =
+      this.matchSingle(
+        html,
+        /<h1[^>]*itemprop="name"[^>]*>([\s\S]*?)<\/h1>/i,
+      ) || '';
+    const h1TitleWithoutViews = h1RawTitle.replace(
+      /<span class="views-block"[\s\S]*?<\/span>/i,
+      '',
+    );
     const title =
-      this.cleanText(
-        this.matchSingle(
-          html,
-          /<h1[^>]*itemprop="name"[^>]*>([\s\S]*?)<\/h1>/i,
-        ) || '',
-      ) ||
+      this.cleanText(h1TitleWithoutViews) ||
       this.cleanText(
         this.matchSingle(
           html,
@@ -134,7 +139,7 @@ export class SexStudentkiVideoParserStrategy implements IVideoParserStrategy {
       this.toAbsoluteUrl(this.extractPlayerSourceUrl(html), canonicalUrl) ||
       undefined;
 
-    const timelineSpriteTemplateUrl =
+    const timelineSpriteTemplateUrlRaw =
       this.toAbsoluteUrl(
         this.matchSingle(
           html,
@@ -142,8 +147,13 @@ export class SexStudentkiVideoParserStrategy implements IVideoParserStrategy {
         ) || '',
         canonicalUrl,
       ) || undefined;
+    const timelineSpriteTemplateUrl = timelineSpriteTemplateUrlRaw?.replace(
+      /%7Bd%7D/gi,
+      '{d}',
+    );
 
     const tags = this.parseTags(html, canonicalUrl);
+    const models = this.parseModels(html);
 
     const trailerMp4Url = mediaId
       ? `https://m.sex-studentki.live/images/trailer/${mediaId}.mp4?3`
@@ -172,6 +182,7 @@ export class SexStudentkiVideoParserStrategy implements IVideoParserStrategy {
       playerSourceUrl,
       timelineSpriteTemplateUrl,
       tags,
+      models,
     };
   }
 
@@ -196,23 +207,6 @@ export class SexStudentkiVideoParserStrategy implements IVideoParserStrategy {
   private parseTags(html: string, baseUrl: string): ParsedTagData[] {
     const tags: ParsedTagData[] = [];
     const uniqueMap = new Map<string, ParsedTagData>();
-
-    const modelRegex =
-      /<a class="tag-modifier" href="([^"]+)"[^>]*>[\s\S]*?<span itemprop="name">([^<]+)<\/span>/g;
-    for (const modelMatch of html.matchAll(modelRegex)) {
-      const slug = this.extractSlug(modelMatch[1]);
-      const name = this.cleanText(modelMatch[2]);
-      if (!name || !slug) {
-        continue;
-      }
-
-      const tag: ParsedTagData = {
-        name,
-        slug,
-        type: ParserTagType.MODEL,
-      };
-      uniqueMap.set(`${tag.type}:${tag.slug}`, tag);
-    }
 
     const tagsAltBlock =
       this.matchSingle(
@@ -273,6 +267,32 @@ export class SexStudentkiVideoParserStrategy implements IVideoParserStrategy {
       const url = this.toAbsoluteUrl(`/${tag.slug}`, baseUrl);
       return !!url;
     });
+  }
+
+  private parseModels(html: string): ParsedModelData[] {
+    const models: ParsedModelData[] = [];
+    const uniqueMap = new Map<string, ParsedModelData>();
+
+    const modelRegex =
+      /<a class="tag-modifier" href="([^"]+)"[^>]*>[\s\S]*?<span itemprop="name">([^<]+)<\/span>/g;
+
+    for (const modelMatch of html.matchAll(modelRegex)) {
+      const slug = this.extractSlug(modelMatch[1]);
+      const name = this.cleanText(modelMatch[2]);
+      if (!name || !slug) {
+        continue;
+      }
+
+      const model: ParsedModelData = {
+        name,
+        slug,
+      };
+
+      uniqueMap.set(model.slug, model);
+    }
+
+    models.push(...uniqueMap.values());
+    return models;
   }
 
   private extractSlug(href: string): string {

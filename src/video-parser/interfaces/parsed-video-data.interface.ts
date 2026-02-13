@@ -8,6 +8,11 @@ export interface ParsedTagData {
   groupLabel?: string;
 }
 
+export interface ParsedModelData {
+  name: string;
+  slug: string;
+}
+
 export interface ParsedVideoCategoryItem {
   pageUrl: string;
   mediaId?: string;
@@ -40,4 +45,5 @@ export interface ParsedVideoData {
   directVideoExpiresAt?: Date;
   timelineSpriteTemplateUrl?: string;
   tags: ParsedTagData[];
+  models: ParsedModelData[];
 }

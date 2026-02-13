@@ -9,12 +9,22 @@ import { ParserVideoTag } from './entities/parser-video-tag.entity';
 import { SexStudentkiVideoParserStrategy } from './strategies/sex-studentki-video-parser.strategy';
 import { VideoParserRefreshScheduler } from './scheduler/video-parser-refresh.scheduler';
 import { RawTagMapping } from 'src/tag-governance/entities/raw-tag-mapping.entity';
+import { RawModel } from 'src/tag-governance/entities/raw-model.entity';
+import { VideoRawModel } from 'src/tag-governance/entities/video-raw-model.entity';
+import { RawModelMapping } from 'src/tag-governance/entities/raw-model-mapping.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ParsedVideo, ParsedVideoSource]),
     TypeOrmModule.forFeature(
-      [ParserTag, ParserVideoTag, RawTagMapping],
+      [
+        ParserTag,
+        ParserVideoTag,
+        RawTagMapping,
+        RawModel,
+        VideoRawModel,
+        RawModelMapping,
+      ],
       'tags',
     ),
   ],

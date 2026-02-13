@@ -18,6 +18,10 @@ import { MapRawTagDto } from './dto/map-raw-tag.dto';
 import { IgnoreRawTagDto } from './dto/ignore-raw-tag.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { CreateCanonicalModelDto } from './dto/create-canonical-model.dto';
+import { UpdateCanonicalModelDto } from './dto/update-canonical-model.dto';
+import { MapRawModelDto } from './dto/map-raw-model.dto';
+import { IgnoreRawModelDto } from './dto/ignore-raw-model.dto';
 
 @Controller('admin/tag-governance')
 export class TagGovernanceController {
@@ -46,6 +50,31 @@ export class TagGovernanceController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteCanonicalTag(@Param('id', ParseIntPipe) id: number) {
     await this.tagGovernanceService.deleteCanonicalTag(id);
+  }
+
+  @Get('canonical-models')
+  async listCanonicalModels() {
+    return this.tagGovernanceService.listCanonicalModels();
+  }
+
+  @Post('canonical-models')
+  @HttpCode(HttpStatus.OK)
+  async createCanonicalModel(@Body() dto: CreateCanonicalModelDto) {
+    return this.tagGovernanceService.createCanonicalModel(dto);
+  }
+
+  @Patch('canonical-models/:id')
+  async updateCanonicalModel(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateCanonicalModelDto,
+  ) {
+    return this.tagGovernanceService.updateCanonicalModel(id, dto);
+  }
+
+  @Delete('canonical-models/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteCanonicalModel(@Param('id', ParseIntPipe) id: number) {
+    await this.tagGovernanceService.deleteCanonicalModel(id);
   }
 
   @Get('raw-tags/unmapped')
@@ -78,11 +107,50 @@ export class TagGovernanceController {
     return this.tagGovernanceService.ignoreRawTag(rawTagId, dto);
   }
 
+  @Get('raw-models/unmapped')
+  async listUnmappedRawModels(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const parsedLimit = limit ? parseInt(limit, 10) : 50;
+    const parsedOffset = offset ? parseInt(offset, 10) : 0;
+
+    return this.tagGovernanceService.listUnmappedRawModels(
+      parsedLimit,
+      parsedOffset,
+    );
+  }
+
+  @Patch('raw-models/:rawModelId/map')
+  async mapRawModel(
+    @Param('rawModelId', ParseIntPipe) rawModelId: number,
+    @Body() dto: MapRawModelDto,
+  ) {
+    return this.tagGovernanceService.mapRawModel(rawModelId, dto);
+  }
+
+  @Patch('raw-models/:rawModelId/ignore')
+  async ignoreRawModel(
+    @Param('rawModelId', ParseIntPipe) rawModelId: number,
+    @Body() dto: IgnoreRawModelDto,
+  ) {
+    return this.tagGovernanceService.ignoreRawModel(rawModelId, dto);
+  }
+
   @Get('parsed-videos/:parsedVideoId/mapping-status')
   async getParsedVideoMappingStatus(
     @Param('parsedVideoId', ParseIntPipe) parsedVideoId: number,
   ) {
     return this.tagGovernanceService.getParsedVideoMappingStatus(parsedVideoId);
+  }
+
+  @Get('parsed-videos/:parsedVideoId/model-mapping-status')
+  async getParsedVideoModelMappingStatus(
+    @Param('parsedVideoId', ParseIntPipe) parsedVideoId: number,
+  ) {
+    return this.tagGovernanceService.getParsedVideoModelMappingStatus(
+      parsedVideoId,
+    );
   }
 
   @Get('categories')

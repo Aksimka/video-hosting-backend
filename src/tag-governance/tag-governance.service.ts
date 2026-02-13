@@ -20,6 +20,14 @@ import { CategoryCanonicalTag } from './entities/category-canonical-tag.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { CategoryMatchMode } from './enums/category-match-mode.enum';
+import { RawModel } from './entities/raw-model.entity';
+import { VideoRawModel } from './entities/video-raw-model.entity';
+import { CanonicalModel } from './entities/canonical-model.entity';
+import { RawModelMapping } from './entities/raw-model-mapping.entity';
+import { CreateCanonicalModelDto } from './dto/create-canonical-model.dto';
+import { UpdateCanonicalModelDto } from './dto/update-canonical-model.dto';
+import { MapRawModelDto } from './dto/map-raw-model.dto';
+import { IgnoreRawModelDto } from './dto/ignore-raw-model.dto';
 
 @Injectable()
 export class TagGovernanceService {
@@ -38,6 +46,14 @@ export class TagGovernanceService {
     private readonly categoryRepository: Repository<Category>,
     @InjectRepository(CategoryCanonicalTag, 'tags')
     private readonly categoryCanonicalTagRepository: Repository<CategoryCanonicalTag>,
+    @InjectRepository(RawModel, 'tags')
+    private readonly rawModelRepository: Repository<RawModel>,
+    @InjectRepository(VideoRawModel, 'tags')
+    private readonly videoRawModelRepository: Repository<VideoRawModel>,
+    @InjectRepository(CanonicalModel, 'tags')
+    private readonly canonicalModelRepository: Repository<CanonicalModel>,
+    @InjectRepository(RawModelMapping, 'tags')
+    private readonly rawModelMappingRepository: Repository<RawModelMapping>,
   ) {}
 
   async ensureMappingsForRawTagIds(rawTagIds: number[]): Promise<void> {
@@ -73,13 +89,57 @@ export class TagGovernanceService {
     );
   }
 
-  async assertParsedVideoReadyForPublish(parsedVideoId: number): Promise<void> {
-    const status = await this.getParsedVideoMappingStatus(parsedVideoId);
+  async ensureMappingsForRawModelIds(rawModelIds: number[]): Promise<void> {
+    const uniqueModelIds = Array.from(new Set(rawModelIds)).filter(
+      (id) => id > 0,
+    );
+    if (uniqueModelIds.length === 0) {
+      return;
+    }
 
-    if (status.unmappedCount > 0) {
-      const labels = status.unmapped.map((item) => item.rawTag.name);
+    const existingMappings = await this.rawModelMappingRepository.find({
+      where: {
+        raw_model_id: In(uniqueModelIds),
+      },
+      select: ['raw_model_id'],
+    });
+
+    const existingIds = new Set(
+      existingMappings.map((mapping) => mapping.raw_model_id),
+    );
+
+    const toCreate = uniqueModelIds.filter((id) => !existingIds.has(id));
+    if (toCreate.length === 0) {
+      return;
+    }
+
+    await this.rawModelMappingRepository.save(
+      toCreate.map((rawModelId) =>
+        this.rawModelMappingRepository.create({
+          raw_model_id: rawModelId,
+          status: RawTagMappingStatus.UNMAPPED,
+          canonical_model_id: null,
+        }),
+      ),
+    );
+  }
+
+  async assertParsedVideoReadyForPublish(parsedVideoId: number): Promise<void> {
+    const tagStatus = await this.getParsedVideoMappingStatus(parsedVideoId);
+    const modelStatus =
+      await this.getParsedVideoModelMappingStatus(parsedVideoId);
+
+    if (tagStatus.unmappedCount > 0) {
+      const labels = tagStatus.unmapped.map((item) => item.rawTag.name);
       throw new BadRequestException(
         `Video has unmapped tags and cannot be published: ${labels.join(', ')}`,
+      );
+    }
+
+    if (modelStatus.unmappedCount > 0) {
+      const labels = modelStatus.unmapped.map((item) => item.rawModel.name);
+      throw new BadRequestException(
+        `Video has unmapped models and cannot be published: ${labels.join(', ')}`,
       );
     }
   }
@@ -184,6 +244,105 @@ export class TagGovernanceService {
     };
   }
 
+  async getParsedVideoModelMappingStatus(parsedVideoId: number): Promise<{
+    parsedVideoId: number;
+    totalRawModels: number;
+    mappedCount: number;
+    ignoredCount: number;
+    unmappedCount: number;
+    unmapped: Array<{
+      mappingId: number;
+      rawModel: {
+        id: number;
+        site: string;
+        name: string;
+        slug: string;
+      };
+    }>;
+  }> {
+    const parsedVideo = await this.parsedVideoRepository.findOneBy({
+      id: parsedVideoId,
+    });
+
+    if (!parsedVideo) {
+      throw new NotFoundException(
+        `Parsed video with id ${parsedVideoId} not found`,
+      );
+    }
+
+    const externalKey = this.buildExternalVideoKey(
+      parsedVideo.site,
+      parsedVideo.page_url,
+    );
+
+    const videoModels = await this.videoRawModelRepository.find({
+      where: {
+        site: parsedVideo.site,
+        video_external_key: externalKey,
+      },
+    });
+
+    const rawModelIds = videoModels.map((link) => link.raw_model_id);
+    await this.ensureMappingsForRawModelIds(rawModelIds);
+
+    if (rawModelIds.length === 0) {
+      return {
+        parsedVideoId,
+        totalRawModels: 0,
+        mappedCount: 0,
+        ignoredCount: 0,
+        unmappedCount: 0,
+        unmapped: [],
+      };
+    }
+
+    const mappings = await this.rawModelMappingRepository.find({
+      where: {
+        raw_model_id: In(rawModelIds),
+      },
+      relations: ['raw_model', 'canonical_model'],
+      order: {
+        id: 'ASC',
+      },
+    });
+
+    const mappedCount = mappings.filter(
+      (mapping) =>
+        mapping.status === RawTagMappingStatus.MAPPED &&
+        mapping.canonical_model_id !== null,
+    ).length;
+
+    const ignoredCount = mappings.filter(
+      (mapping) => mapping.status === RawTagMappingStatus.IGNORED,
+    ).length;
+
+    const unmapped = mappings
+      .filter(
+        (mapping) =>
+          mapping.status !== RawTagMappingStatus.IGNORED &&
+          (mapping.status !== RawTagMappingStatus.MAPPED ||
+            mapping.canonical_model_id === null),
+      )
+      .map((mapping) => ({
+        mappingId: mapping.id,
+        rawModel: {
+          id: mapping.raw_model.id,
+          site: mapping.raw_model.site,
+          name: mapping.raw_model.name,
+          slug: mapping.raw_model.slug,
+        },
+      }));
+
+    return {
+      parsedVideoId,
+      totalRawModels: mappings.length,
+      mappedCount,
+      ignoredCount,
+      unmappedCount: unmapped.length,
+      unmapped,
+    };
+  }
+
   async listUnmappedRawTags(limit = 50, offset = 0) {
     const [rows, total] = await this.rawTagMappingRepository.findAndCount({
       where: {
@@ -204,6 +363,33 @@ export class TagGovernanceService {
           name: row.raw_tag.name,
           slug: row.raw_tag.slug,
           type: row.raw_tag.type,
+        },
+      })),
+      total,
+      limit,
+      offset,
+    };
+  }
+
+  async listUnmappedRawModels(limit = 50, offset = 0) {
+    const [rows, total] = await this.rawModelMappingRepository.findAndCount({
+      where: {
+        status: RawTagMappingStatus.UNMAPPED,
+      },
+      relations: ['raw_model'],
+      order: { updated_at: 'ASC', id: 'ASC' },
+      take: Math.max(1, Math.min(limit, 200)),
+      skip: Math.max(0, offset),
+    });
+
+    return {
+      items: rows.map((row) => ({
+        mappingId: row.id,
+        rawModel: {
+          id: row.raw_model.id,
+          site: row.raw_model.site,
+          name: row.raw_model.name,
+          slug: row.raw_model.slug,
         },
       })),
       total,
@@ -245,6 +431,44 @@ export class TagGovernanceService {
     mapping.mapped_by = dto.mappedBy || null;
 
     return this.rawTagMappingRepository.save(mapping);
+  }
+
+  async mapRawModel(
+    rawModelId: number,
+    dto: MapRawModelDto,
+  ): Promise<RawModelMapping> {
+    const mapping = await this.getOrCreateRawModelMapping(rawModelId);
+
+    const canonicalModel = await this.canonicalModelRepository.findOneBy({
+      id: dto.canonicalModelId,
+    });
+
+    if (!canonicalModel) {
+      throw new NotFoundException(
+        `Canonical model with id ${dto.canonicalModelId} not found`,
+      );
+    }
+
+    mapping.canonical_model_id = canonicalModel.id;
+    mapping.status = RawTagMappingStatus.MAPPED;
+    mapping.mapped_at = new Date();
+    mapping.mapped_by = dto.mappedBy || null;
+
+    return this.rawModelMappingRepository.save(mapping);
+  }
+
+  async ignoreRawModel(
+    rawModelId: number,
+    dto: IgnoreRawModelDto,
+  ): Promise<RawModelMapping> {
+    const mapping = await this.getOrCreateRawModelMapping(rawModelId);
+
+    mapping.canonical_model_id = null;
+    mapping.status = RawTagMappingStatus.IGNORED;
+    mapping.mapped_at = new Date();
+    mapping.mapped_by = dto.mappedBy || null;
+
+    return this.rawModelMappingRepository.save(mapping);
   }
 
   async listCanonicalTags(): Promise<CanonicalTag[]> {
@@ -303,6 +527,66 @@ export class TagGovernanceService {
 
   async deleteCanonicalTag(id: number): Promise<void> {
     await this.canonicalTagRepository.delete(id);
+  }
+
+  async listCanonicalModels(): Promise<CanonicalModel[]> {
+    return this.canonicalModelRepository.find({
+      order: { name: 'ASC' },
+    });
+  }
+
+  async createCanonicalModel(
+    dto: CreateCanonicalModelDto,
+  ): Promise<CanonicalModel> {
+    const slug = this.normalizeSlug(dto.slug);
+    const existing = await this.canonicalModelRepository.findOneBy({ slug });
+    if (existing) {
+      throw new BadRequestException(
+        `Canonical model with slug ${slug} already exists`,
+      );
+    }
+
+    const created = this.canonicalModelRepository.create({
+      name: dto.name.trim(),
+      slug,
+      is_active: dto.isActive ?? true,
+    });
+
+    return this.canonicalModelRepository.save(created);
+  }
+
+  async updateCanonicalModel(
+    id: number,
+    dto: UpdateCanonicalModelDto,
+  ): Promise<CanonicalModel> {
+    const model = await this.canonicalModelRepository.findOneBy({ id });
+    if (!model) {
+      throw new NotFoundException(`Canonical model with id ${id} not found`);
+    }
+
+    if (dto.slug !== undefined) {
+      const slug = this.normalizeSlug(dto.slug);
+      const duplicate = await this.canonicalModelRepository.findOneBy({ slug });
+      if (duplicate && duplicate.id !== id) {
+        throw new BadRequestException(
+          `Canonical model with slug ${slug} already exists`,
+        );
+      }
+      model.slug = slug;
+    }
+
+    if (dto.name !== undefined) {
+      model.name = dto.name.trim();
+    }
+    if (dto.isActive !== undefined) {
+      model.is_active = dto.isActive;
+    }
+
+    return this.canonicalModelRepository.save(model);
+  }
+
+  async deleteCanonicalModel(id: number): Promise<void> {
+    await this.canonicalModelRepository.delete(id);
   }
 
   async createCategory(dto: CreateCategoryDto) {
@@ -434,6 +718,36 @@ export class TagGovernanceService {
     });
 
     return this.rawTagMappingRepository.save(created);
+  }
+
+  private async getOrCreateRawModelMapping(
+    rawModelId: number,
+  ): Promise<RawModelMapping> {
+    const rawModel = await this.rawModelRepository.findOneBy({
+      id: rawModelId,
+    });
+    if (!rawModel) {
+      throw new NotFoundException(`Raw model with id ${rawModelId} not found`);
+    }
+
+    const existing = await this.rawModelMappingRepository.findOne({
+      where: {
+        raw_model_id: rawModelId,
+      },
+      relations: ['raw_model', 'canonical_model'],
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    const created = this.rawModelMappingRepository.create({
+      raw_model_id: rawModelId,
+      status: RawTagMappingStatus.UNMAPPED,
+      canonical_model_id: null,
+    });
+
+    return this.rawModelMappingRepository.save(created);
   }
 
   private async assertCanonicalTagsExist(

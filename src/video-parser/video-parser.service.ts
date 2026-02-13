@@ -14,10 +14,14 @@ import { ParserTag } from './entities/parser-tag.entity';
 import { ParserVideoTag } from './entities/parser-video-tag.entity';
 import { RawTagMapping } from 'src/tag-governance/entities/raw-tag-mapping.entity';
 import { RawTagMappingStatus } from 'src/tag-governance/enums/raw-tag-mapping-status.enum';
+import { RawModel } from 'src/tag-governance/entities/raw-model.entity';
+import { VideoRawModel } from 'src/tag-governance/entities/video-raw-model.entity';
+import { RawModelMapping } from 'src/tag-governance/entities/raw-model-mapping.entity';
 import { ParserVideoSourceType } from './enums/parser-video-source-type.enum';
 import { ParserSourceStatus } from './enums/parser-source-status.enum';
 import { ParserTagType } from './enums/parser-tag-type.enum';
 import {
+  ParsedModelData,
   ParsedTagData,
   ParsedVideoCategoryItem,
   ParsedVideoData,
@@ -42,6 +46,12 @@ export class VideoParserService {
     private readonly parserVideoTagRepository: Repository<ParserVideoTag>,
     @InjectRepository(RawTagMapping, 'tags')
     private readonly rawTagMappingRepository: Repository<RawTagMapping>,
+    @InjectRepository(RawModel, 'tags')
+    private readonly rawModelRepository: Repository<RawModel>,
+    @InjectRepository(VideoRawModel, 'tags')
+    private readonly videoRawModelRepository: Repository<VideoRawModel>,
+    @InjectRepository(RawModelMapping, 'tags')
+    private readonly rawModelMappingRepository: Repository<RawModelMapping>,
     private readonly sexStudentkiStrategy: SexStudentkiVideoParserStrategy,
   ) {
     this.strategies = [sexStudentkiStrategy];
@@ -217,10 +227,12 @@ export class VideoParserService {
   async getParsedVideoWithTags(videoId: number): Promise<{
     video: ParsedVideo;
     tags: ParserTag[];
+    models: RawModel[];
   }> {
     const video = await this.findParsedVideoById(videoId);
     const tags = await this.getTagsForParsedVideo(video);
-    return { video, tags };
+    const models = await this.getModelsForParsedVideo(video);
+    return { video, tags, models };
   }
 
   async refreshVideoSources(
@@ -578,6 +590,7 @@ export class VideoParserService {
     }
 
     await this.syncVideoTags(savedVideo, parsedVideo.tags || []);
+    await this.syncVideoModels(savedVideo, parsedVideo.models || []);
 
     return this.findParsedVideoById(savedVideo.id);
   }
@@ -662,6 +675,81 @@ export class VideoParserService {
     await this.ensureRawTagMappings(tagIds);
   }
 
+  private async syncVideoModels(
+    video: ParsedVideo,
+    models: ParsedModelData[],
+  ): Promise<void> {
+    const uniqueModelsMap = new Map<string, ParsedModelData>();
+    for (const model of models) {
+      if (!model.name || !model.slug) {
+        continue;
+      }
+      if (!uniqueModelsMap.has(model.slug)) {
+        uniqueModelsMap.set(model.slug, model);
+      }
+    }
+
+    const normalizedModels = Array.from(uniqueModelsMap.values());
+    const externalKey = this.buildExternalVideoKey(video.site, video.page_url);
+
+    await this.videoRawModelRepository.delete({
+      site: video.site,
+      video_external_key: externalKey,
+    });
+
+    if (normalizedModels.length === 0) {
+      return;
+    }
+
+    const rawModelIds: number[] = [];
+
+    for (const model of normalizedModels) {
+      const existingRawModel = await this.rawModelRepository.findOne({
+        where: {
+          site: video.site,
+          slug: model.slug,
+        },
+      });
+
+      if (existingRawModel) {
+        if (existingRawModel.name !== model.name) {
+          existingRawModel.name = model.name;
+          existingRawModel.normalized_name = this.normalizeModelName(
+            model.name,
+          );
+          await this.rawModelRepository.save(existingRawModel);
+        }
+        rawModelIds.push(existingRawModel.id);
+        continue;
+      }
+
+      const createdRawModel = this.rawModelRepository.create({
+        site: video.site,
+        slug: model.slug,
+        name: model.name,
+        normalized_name: this.normalizeModelName(model.name),
+      });
+
+      const savedRawModel = await this.rawModelRepository.save(createdRawModel);
+      rawModelIds.push(savedRawModel.id);
+    }
+
+    if (rawModelIds.length === 0) {
+      return;
+    }
+
+    const links = rawModelIds.map((rawModelId) =>
+      this.videoRawModelRepository.create({
+        site: video.site,
+        video_external_key: externalKey,
+        raw_model_id: rawModelId,
+      }),
+    );
+
+    await this.videoRawModelRepository.save(links);
+    await this.ensureRawModelMappings(rawModelIds);
+  }
+
   private async ensureRawTagMappings(rawTagIds: number[]): Promise<void> {
     const uniqueTagIds = Array.from(new Set(rawTagIds)).filter((id) => id > 0);
     if (uniqueTagIds.length === 0) {
@@ -693,6 +781,39 @@ export class VideoParserService {
     );
   }
 
+  private async ensureRawModelMappings(rawModelIds: number[]): Promise<void> {
+    const uniqueModelIds = Array.from(new Set(rawModelIds)).filter(
+      (id) => id > 0,
+    );
+    if (uniqueModelIds.length === 0) {
+      return;
+    }
+
+    const existing = await this.rawModelMappingRepository.find({
+      where: {
+        raw_model_id: In(uniqueModelIds),
+      },
+      select: ['raw_model_id'],
+    });
+
+    const existingIds = new Set(existing.map((item) => item.raw_model_id));
+    const toCreate = uniqueModelIds.filter((id) => !existingIds.has(id));
+
+    if (toCreate.length === 0) {
+      return;
+    }
+
+    await this.rawModelMappingRepository.save(
+      toCreate.map((rawModelId) =>
+        this.rawModelMappingRepository.create({
+          raw_model_id: rawModelId,
+          status: RawTagMappingStatus.UNMAPPED,
+          canonical_model_id: null,
+        }),
+      ),
+    );
+  }
+
   private buildExternalVideoKey(
     site: ParserVideoSite,
     pageUrl: string,
@@ -719,6 +840,31 @@ export class VideoParserService {
     return this.parserTagRepository.findBy({
       id: In(tagIds),
     });
+  }
+
+  private async getModelsForParsedVideo(
+    video: ParsedVideo,
+  ): Promise<RawModel[]> {
+    const externalKey = this.buildExternalVideoKey(video.site, video.page_url);
+    const links = await this.videoRawModelRepository.find({
+      where: {
+        site: video.site,
+        video_external_key: externalKey,
+      },
+    });
+
+    if (links.length === 0) {
+      return [];
+    }
+
+    const rawModelIds = links.map((link) => link.raw_model_id);
+    return this.rawModelRepository.findBy({
+      id: In(rawModelIds),
+    });
+  }
+
+  private normalizeModelName(value: string): string {
+    return value.trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
   private async upsertSource(
