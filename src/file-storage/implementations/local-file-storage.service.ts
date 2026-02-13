@@ -28,10 +28,12 @@ export class LocalFileStorageService implements IFileStorage {
     void this.ensureUploadsDirectory();
   }
 
+  /** Гарантирует существование корневой папки для локальных загрузок. */
   private async ensureUploadsDirectory(): Promise<void> {
     await ensureDirectory(this.uploadsDir);
   }
 
+  /** Сохраняет бинарный файл в локальную файловую систему. */
   async saveFile(
     file: Express.Multer.File,
     destination?: string,
@@ -89,6 +91,7 @@ export class LocalFileStorageService implements IFileStorage {
     };
   }
 
+  /** Удаляет локальный файл, игнорируя отсутствие файла. */
   async deleteFile(filePath: string): Promise<void> {
     try {
       await fs.unlink(filePath);
@@ -100,6 +103,7 @@ export class LocalFileStorageService implements IFileStorage {
     }
   }
 
+  /** Возвращает web-путь к локальному файлу относительно uploads. */
   getFileUrl(filePath: string): Promise<string> {
     // Для локального хранилища возвращаем относительный путь
     // В production можно настроить статический сервер или CDN
@@ -107,6 +111,7 @@ export class LocalFileStorageService implements IFileStorage {
     return Promise.resolve(`/uploads/${normalizeWebPath(relativePath)}`);
   }
 
+  /** Проверяет существование локального файла на диске. */
   async fileExists(filePath: string): Promise<boolean> {
     return checkFileExists(filePath);
   }

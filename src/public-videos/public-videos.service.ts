@@ -12,6 +12,7 @@ export class PublicVideosService {
     private readonly publishedVideosRepository: Repository<PublishedVideo>,
   ) {}
 
+  /** Возвращает публичный пагинированный список только опубликованных видео. */
   async findAll(query: ListPublicVideosDto) {
     const limit = query.limit ?? 20;
     const offset = query.offset ?? 0;
@@ -31,6 +32,7 @@ export class PublicVideosService {
     };
   }
 
+  /** Возвращает публичную детальную карточку опубликованного видео по id. */
   async findOne(id: number) {
     const video = await this.publishedVideosRepository.findOne({
       where: {
@@ -46,6 +48,7 @@ export class PublicVideosService {
     return this.mapDetails(video);
   }
 
+  /** Преобразует PublishedVideo в компактный list item для каталога. */
   private mapListItem(video: PublishedVideo) {
     return {
       id: video.id,
@@ -57,6 +60,7 @@ export class PublicVideosService {
     };
   }
 
+  /** Преобразует PublishedVideo в детальную модель для публичной страницы. */
   private mapDetails(video: PublishedVideo) {
     return {
       id: video.id,

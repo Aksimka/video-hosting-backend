@@ -56,6 +56,7 @@ export class TagGovernanceService {
     private readonly rawModelMappingRepository: Repository<RawModelMapping>,
   ) {}
 
+  /** Создает отсутствующие mapping-записи для raw-тегов. */
   async ensureMappingsForRawTagIds(rawTagIds: number[]): Promise<void> {
     const uniqueTagIds = Array.from(new Set(rawTagIds)).filter((id) => id > 0);
     if (uniqueTagIds.length === 0) {
@@ -89,6 +90,7 @@ export class TagGovernanceService {
     );
   }
 
+  /** Создает отсутствующие mapping-записи для raw-моделей. */
   async ensureMappingsForRawModelIds(rawModelIds: number[]): Promise<void> {
     const uniqueModelIds = Array.from(new Set(rawModelIds)).filter(
       (id) => id > 0,
@@ -124,6 +126,7 @@ export class TagGovernanceService {
     );
   }
 
+  /** Проверяет готовность parsed-видео к публикации по тегам и моделям. */
   async assertParsedVideoReadyForPublish(parsedVideoId: number): Promise<void> {
     const tagStatus = await this.getParsedVideoMappingStatus(parsedVideoId);
     const modelStatus =
@@ -144,6 +147,7 @@ export class TagGovernanceService {
     }
   }
 
+  /** Возвращает сводку статусов маппинга raw-тегов для конкретного parsed-видео. */
   async getParsedVideoMappingStatus(parsedVideoId: number): Promise<{
     parsedVideoId: number;
     totalRawTags: number;
@@ -244,6 +248,7 @@ export class TagGovernanceService {
     };
   }
 
+  /** Возвращает сводку статусов маппинга raw-моделей для конкретного parsed-видео. */
   async getParsedVideoModelMappingStatus(parsedVideoId: number): Promise<{
     parsedVideoId: number;
     totalRawModels: number;
@@ -343,6 +348,7 @@ export class TagGovernanceService {
     };
   }
 
+  /** Возвращает пагинированный список unmapped raw-тегов для админской модерации. */
   async listUnmappedRawTags(limit = 50, offset = 0) {
     const [rows, total] = await this.rawTagMappingRepository.findAndCount({
       where: {
@@ -371,6 +377,7 @@ export class TagGovernanceService {
     };
   }
 
+  /** Возвращает пагинированный список unmapped raw-моделей для админской модерации. */
   async listUnmappedRawModels(limit = 50, offset = 0) {
     const [rows, total] = await this.rawModelMappingRepository.findAndCount({
       where: {
@@ -398,6 +405,7 @@ export class TagGovernanceService {
     };
   }
 
+  /** Привязывает raw-тег к каноническому тегу и помечает mapping как MAPPED. */
   async mapRawTag(rawTagId: number, dto: MapRawTagDto): Promise<RawTagMapping> {
     const mapping = await this.getOrCreateRawTagMapping(rawTagId);
 
@@ -419,6 +427,7 @@ export class TagGovernanceService {
     return this.rawTagMappingRepository.save(mapping);
   }
 
+  /** Помечает raw-тег как IGNORED без привязки к каноническому тегу. */
   async ignoreRawTag(
     rawTagId: number,
     dto: IgnoreRawTagDto,
@@ -433,6 +442,7 @@ export class TagGovernanceService {
     return this.rawTagMappingRepository.save(mapping);
   }
 
+  /** Привязывает raw-модель к канонической модели и помечает mapping как MAPPED. */
   async mapRawModel(
     rawModelId: number,
     dto: MapRawModelDto,
@@ -457,6 +467,7 @@ export class TagGovernanceService {
     return this.rawModelMappingRepository.save(mapping);
   }
 
+  /** Помечает raw-модель как IGNORED без привязки к канонической модели. */
   async ignoreRawModel(
     rawModelId: number,
     dto: IgnoreRawModelDto,
@@ -471,12 +482,14 @@ export class TagGovernanceService {
     return this.rawModelMappingRepository.save(mapping);
   }
 
+  /** Возвращает список канонических тегов. */
   async listCanonicalTags(): Promise<CanonicalTag[]> {
     return this.canonicalTagRepository.find({
       order: { name: 'ASC' },
     });
   }
 
+  /** Создает новый канонический тег. */
   async createCanonicalTag(dto: CreateCanonicalTagDto): Promise<CanonicalTag> {
     const slug = this.normalizeSlug(dto.slug);
     const existing = await this.canonicalTagRepository.findOneBy({ slug });
@@ -495,6 +508,7 @@ export class TagGovernanceService {
     return this.canonicalTagRepository.save(created);
   }
 
+  /** Обновляет поля канонического тега с проверкой уникальности slug. */
   async updateCanonicalTag(
     id: number,
     dto: UpdateCanonicalTagDto,
@@ -525,16 +539,19 @@ export class TagGovernanceService {
     return this.canonicalTagRepository.save(tag);
   }
 
+  /** Удаляет канонический тег по id. */
   async deleteCanonicalTag(id: number): Promise<void> {
     await this.canonicalTagRepository.delete(id);
   }
 
+  /** Возвращает список канонических моделей. */
   async listCanonicalModels(): Promise<CanonicalModel[]> {
     return this.canonicalModelRepository.find({
       order: { name: 'ASC' },
     });
   }
 
+  /** Создает новую каноническую модель. */
   async createCanonicalModel(
     dto: CreateCanonicalModelDto,
   ): Promise<CanonicalModel> {
@@ -555,6 +572,7 @@ export class TagGovernanceService {
     return this.canonicalModelRepository.save(created);
   }
 
+  /** Обновляет поля канонической модели с проверкой уникальности slug. */
   async updateCanonicalModel(
     id: number,
     dto: UpdateCanonicalModelDto,
@@ -585,10 +603,12 @@ export class TagGovernanceService {
     return this.canonicalModelRepository.save(model);
   }
 
+  /** Удаляет каноническую модель по id. */
   async deleteCanonicalModel(id: number): Promise<void> {
     await this.canonicalModelRepository.delete(id);
   }
 
+  /** Создает категорию и связывает ее с указанными canonical tags. */
   async createCategory(dto: CreateCategoryDto) {
     const slug = this.normalizeSlug(dto.slug);
     const exists = await this.categoryRepository.findOneBy({ slug });
@@ -614,6 +634,7 @@ export class TagGovernanceService {
     return this.getCategory(saved.id);
   }
 
+  /** Возвращает список категорий с полным набором canonical tags. */
   async listCategories() {
     const categories = await this.categoryRepository.find({
       order: { name: 'ASC' },
@@ -624,6 +645,7 @@ export class TagGovernanceService {
     );
   }
 
+  /** Возвращает одну категорию вместе с ее canonical tags. */
   async getCategory(categoryId: number) {
     const category = await this.categoryRepository.findOneBy({
       id: categoryId,
@@ -647,6 +669,7 @@ export class TagGovernanceService {
     };
   }
 
+  /** Обновляет свойства категории и, при необходимости, ее набор canonical tags. */
   async updateCategory(categoryId: number, dto: UpdateCategoryDto) {
     const category = await this.categoryRepository.findOneBy({
       id: categoryId,
@@ -688,10 +711,12 @@ export class TagGovernanceService {
     return this.getCategory(category.id);
   }
 
+  /** Удаляет категорию по id. */
   async deleteCategory(categoryId: number): Promise<void> {
     await this.categoryRepository.delete(categoryId);
   }
 
+  /** Возвращает существующий mapping raw-тега или создает новый UNMAPPED. */
   private async getOrCreateRawTagMapping(
     rawTagId: number,
   ): Promise<RawTagMapping> {
@@ -720,6 +745,7 @@ export class TagGovernanceService {
     return this.rawTagMappingRepository.save(created);
   }
 
+  /** Возвращает существующий mapping raw-модели или создает новый UNMAPPED. */
   private async getOrCreateRawModelMapping(
     rawModelId: number,
   ): Promise<RawModelMapping> {
@@ -750,6 +776,7 @@ export class TagGovernanceService {
     return this.rawModelMappingRepository.save(created);
   }
 
+  /** Проверяет, что все переданные canonical tag ids существуют. */
   private async assertCanonicalTagsExist(
     canonicalTagIds: number[],
   ): Promise<void> {
@@ -763,6 +790,7 @@ export class TagGovernanceService {
     }
   }
 
+  /** Полностью пересобирает связи категории с canonical tags. */
   private async replaceCategoryTags(
     categoryId: number,
     canonicalTagIds: number[],
@@ -786,10 +814,12 @@ export class TagGovernanceService {
     );
   }
 
+  /** Строит стабильный внешний ключ parsed-видео для связей governance-слоя. */
   private buildExternalVideoKey(site: string, pageUrl: string): string {
     return `${site}|${pageUrl}`;
   }
 
+  /** Нормализует slug в единый формат для хранения и сравнения. */
   private normalizeSlug(value: string): string {
     return value
       .trim()

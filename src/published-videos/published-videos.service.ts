@@ -24,6 +24,7 @@ export class PublishedVideosService {
     private readonly tagGovernanceService: TagGovernanceService,
   ) {}
 
+  /** Публикует видео из parsed-слоя после проверки готовности governance. */
   async createFromParsed(
     dto: CreatePublishedVideoDto,
   ): Promise<PublishedVideo> {
@@ -54,6 +55,7 @@ export class PublishedVideosService {
     return this.publishedVideosRepository.save(publishedVideo);
   }
 
+  /** Возвращает список опубликованных сущностей, опционально по статусу. */
   async findAll(status?: PublishedVideoStatus): Promise<PublishedVideo[]> {
     return this.publishedVideosRepository.find({
       where: status ? { status } : undefined,
@@ -61,6 +63,7 @@ export class PublishedVideosService {
     });
   }
 
+  /** Возвращает одну запись опубликованного видео для админки. */
   async findOne(id: number): Promise<PublishedVideo> {
     const video = await this.publishedVideosRepository.findOneBy({ id });
     if (!video) {
@@ -70,6 +73,7 @@ export class PublishedVideosService {
     return video;
   }
 
+  /** Частично обновляет snapshot и статус опубликованного видео. */
   async update(
     id: number,
     dto: UpdatePublishedVideoDto,
@@ -121,12 +125,14 @@ export class PublishedVideosService {
     return this.publishedVideosRepository.save(video);
   }
 
+  /** Переводит опубликованное видео в скрытый статус. */
   async hide(id: number): Promise<PublishedVideo> {
     const video = await this.findOne(id);
     video.status = PublishedVideoStatus.HIDDEN;
     return this.publishedVideosRepository.save(video);
   }
 
+  /** Пересобирает snapshot опубликованного видео из текущего parsed состояния. */
   async resyncFromParsed(id: number): Promise<PublishedVideo> {
     const video = await this.findOne(id);
 
@@ -138,6 +144,7 @@ export class PublishedVideosService {
     return this.publishedVideosRepository.save(video);
   }
 
+  /** Загружает parsed-видео и обязательные источники, необходимые для публикации. */
   private async getParsedVideoForPublish(parsedVideoId: number): Promise<{
     parsedVideo: ParsedVideo;
     playerSource: ParsedVideoSource;
@@ -178,6 +185,7 @@ export class PublishedVideosService {
     };
   }
 
+  /** Копирует поля parsed-видео в publish-проекцию (snapshot-слой). */
   private applySnapshot(
     target: PublishedVideo,
     parsedVideo: ParsedVideo,

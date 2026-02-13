@@ -57,6 +57,7 @@ export class VideoParserService {
     this.strategies = [sexStudentkiStrategy];
   }
 
+  /** Парсит страницу категории, дедуплицирует ссылки и опционально гидрирует каждое видео. */
   async parseCategory(
     categoryUrl: string,
     pages = 1,
@@ -122,6 +123,7 @@ export class VideoParserService {
     };
   }
 
+  /** Парсит страницу видео, валидирует обязательный player-source и сохраняет результат. */
   async parseAndStoreVideo(
     videoUrl: string,
     options?: {
@@ -155,6 +157,7 @@ export class VideoParserService {
     return this.persistParsedVideo(parsedVideo);
   }
 
+  /** Возвращает рабочую direct-ссылку; при необходимости обновляет источники on-demand. */
   async getPlayableVideoSource(videoId: number): Promise<{
     videoId: number;
     title: string;
@@ -215,6 +218,7 @@ export class VideoParserService {
     };
   }
 
+  /** Возвращает список parsed-видео для админской выборки. */
   async findParsedVideos(limit = 50, offset = 0): Promise<ParsedVideo[]> {
     return this.parsedVideoRepository.find({
       relations: ['sources'],
@@ -224,6 +228,7 @@ export class VideoParserService {
     });
   }
 
+  /** Возвращает parsed-видео вместе с привязанными raw-тегами и raw-моделями. */
   async getParsedVideoWithTags(videoId: number): Promise<{
     video: ParsedVideo;
     tags: ParserTag[];
@@ -235,6 +240,7 @@ export class VideoParserService {
     return { video, tags, models };
   }
 
+  /** Запускает refresh источников для видео с защитой от параллельных дублей. */
   async refreshVideoSources(
     videoId: number,
     reason = 'manual',
@@ -260,6 +266,7 @@ export class VideoParserService {
     return refreshPromise;
   }
 
+  /** Батчево обновляет direct-ссылки, которые уже истекли или скоро истекут. */
   async refreshExpiringSourcesBatch(
     limit = this.getRefreshBatchSize(),
   ): Promise<{
@@ -309,6 +316,7 @@ export class VideoParserService {
     };
   }
 
+  /** Внутренний refresh pipeline: ищет/обновляет player-source и пересчитывает direct-source. */
   private async refreshVideoSourcesInternal(
     videoId: number,
     reason: string,
@@ -359,6 +367,7 @@ export class VideoParserService {
     return this.findParsedVideoById(video.id);
   }
 
+  /** Разрешает player-ссылку в прямой URL видео и вычисляет срок ее действия. */
   private async resolveDirectVideoSource(
     playerSourceUrl: string,
     pageUrl: string,
@@ -402,6 +411,7 @@ export class VideoParserService {
     };
   }
 
+  /** Извлекает timestamp истечения из query-параметра `expires` direct URL. */
   private extractExpiresAtFromUrl(url: string): Date | null {
     try {
       const parsed = new URL(url);
@@ -425,6 +435,7 @@ export class VideoParserService {
     }
   }
 
+  /** Определяет, нужен ли refresh direct-source прямо сейчас. */
   private shouldRefreshDirectSource(source?: ParsedVideoSource): boolean {
     if (!source || !source.url) {
       return true;
@@ -438,6 +449,7 @@ export class VideoParserService {
     return source.expires_at.getTime() <= thresholdTime;
   }
 
+  /** Вычисляет статус источника по дате истечения. */
   private getSourceStatusByExpiresAt(
     expiresAt: Date | null,
   ): ParserSourceStatus {
@@ -450,6 +462,7 @@ export class VideoParserService {
       : ParserSourceStatus.EXPIRED;
   }
 
+  /** Возвращает порог упреждающего refresh в миллисекундах. */
   private getDirectRefreshThresholdMs(): number {
     const raw = parseInt(
       process.env.PARSER_DIRECT_REFRESH_THRESHOLD_SECONDS || '900',
@@ -458,11 +471,13 @@ export class VideoParserService {
     return Number.isNaN(raw) ? 900_000 : raw * 1000;
   }
 
+  /** Возвращает размер пачки для планового refresh процесса. */
   private getRefreshBatchSize(): number {
     const raw = parseInt(process.env.PARSER_REFRESH_BATCH_SIZE || '20', 10);
     return Number.isNaN(raw) ? 20 : Math.max(1, Math.min(200, raw));
   }
 
+  /** Upsert для parsed_videos и всех связанных источников/сущностей parser-слоя. */
   private async persistParsedVideo(
     parsedVideo: ParsedVideoData,
     existingVideo?: ParsedVideo,
@@ -595,6 +610,7 @@ export class VideoParserService {
     return this.findParsedVideoById(savedVideo.id);
   }
 
+  /** Синхронизирует raw-теги видео и поддерживает mapping-записи для governance. */
   private async syncVideoTags(
     video: ParsedVideo,
     tags: ParsedTagData[],
@@ -675,6 +691,7 @@ export class VideoParserService {
     await this.ensureRawTagMappings(tagIds);
   }
 
+  /** Синхронизирует raw-модели видео и поддерживает mapping-записи для governance. */
   private async syncVideoModels(
     video: ParsedVideo,
     models: ParsedModelData[],
@@ -750,6 +767,7 @@ export class VideoParserService {
     await this.ensureRawModelMappings(rawModelIds);
   }
 
+  /** Гарантирует наличие mapping-записей для raw-тегов (status=UNMAPPED по умолчанию). */
   private async ensureRawTagMappings(rawTagIds: number[]): Promise<void> {
     const uniqueTagIds = Array.from(new Set(rawTagIds)).filter((id) => id > 0);
     if (uniqueTagIds.length === 0) {
@@ -781,6 +799,7 @@ export class VideoParserService {
     );
   }
 
+  /** Гарантирует наличие mapping-записей для raw-моделей (status=UNMAPPED по умолчанию). */
   private async ensureRawModelMappings(rawModelIds: number[]): Promise<void> {
     const uniqueModelIds = Array.from(new Set(rawModelIds)).filter(
       (id) => id > 0,
@@ -814,6 +833,7 @@ export class VideoParserService {
     );
   }
 
+  /** Строит стабильный внешний ключ видео в рамках parser/governance связок. */
   private buildExternalVideoKey(
     site: ParserVideoSite,
     pageUrl: string,
@@ -821,6 +841,7 @@ export class VideoParserService {
     return `${site}|${pageUrl}`;
   }
 
+  /** Возвращает raw-теги, связанные с parsed-видео по внешнему ключу. */
   private async getTagsForParsedVideo(
     video: ParsedVideo,
   ): Promise<ParserTag[]> {
@@ -842,6 +863,7 @@ export class VideoParserService {
     });
   }
 
+  /** Возвращает raw-модели, связанные с parsed-видео по внешнему ключу. */
   private async getModelsForParsedVideo(
     video: ParsedVideo,
   ): Promise<RawModel[]> {
@@ -863,10 +885,12 @@ export class VideoParserService {
     });
   }
 
+  /** Нормализует имя модели для дедупликации и поиска совпадений. */
   private normalizeModelName(value: string): string {
     return value.trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
+  /** Upsert конкретного источника parsed-видео по типу (`PAGE`, `PLAYER`, `DIRECT_VIDEO`, ...). */
   private async upsertSource(
     parsedVideoId: number,
     data: {
@@ -900,6 +924,7 @@ export class VideoParserService {
     return this.parsedVideoSourceRepository.save(source);
   }
 
+  /** Ищет источник указанного типа в уже загруженных relations parsed-видео. */
   private findSource(
     video: ParsedVideo,
     type: ParserVideoSourceType,
@@ -907,6 +932,7 @@ export class VideoParserService {
     return video.sources?.find((source) => source.type === type);
   }
 
+  /** Загружает parsed-видео с sources и бросает 404 при отсутствии записи. */
   private async findParsedVideoById(videoId: number): Promise<ParsedVideo> {
     const video = await this.parsedVideoRepository.findOne({
       where: { id: videoId },
@@ -920,6 +946,7 @@ export class VideoParserService {
     return video;
   }
 
+  /** Подбирает стратегию парсинга по URL источника. */
   private getStrategyForUrl(url: string): IVideoParserStrategy {
     const strategy = this.strategies.find((item) => item.canHandleUrl(url));
     if (!strategy) {
@@ -929,6 +956,7 @@ export class VideoParserService {
     return strategy;
   }
 
+  /** Возвращает enum сайта для выбранной стратегии парсинга. */
   private resolveSiteByStrategy(
     strategy: IVideoParserStrategy,
   ): ParserVideoSite {
@@ -939,6 +967,7 @@ export class VideoParserService {
     throw new BadRequestException('Unable to resolve site for parser strategy');
   }
 
+  /** Строит URL страницы категории с учетом пагинации. */
   private buildCategoryPageUrl(baseUrl: string, page: number): string {
     if (page <= 1) {
       return baseUrl;

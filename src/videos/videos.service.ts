@@ -59,18 +59,22 @@ export class VideosService {
     private videoConverterService: VideoConverterService,
   ) {}
 
+  /** Возвращает полный список видео из основной таблицы. */
   findAll(): Promise<Video[]> {
     return this.videosRepository.find();
   }
 
+  /** Возвращает видео по id либо null, если запись не найдена. */
   findOne(id: number): Promise<Video | null> {
     return this.videosRepository.findOneBy({ id });
   }
 
+  /** Удаляет видео по id. */
   async remove(id: number): Promise<void> {
     await this.videosRepository.delete(id);
   }
 
+  /** Получает базовый video asset для потоковой отдачи. */
   async getVideoStreamInfo(id: number): Promise<VideoAsset> {
     const video = await this.videosRepository.findOne({
       where: { id },
@@ -94,6 +98,7 @@ export class VideosService {
     return video.video_asset;
   }
 
+  /** Возвращает HLS master asset для видео, если он уже создан. */
   async getHLSVideoAsset(videoId: number): Promise<VideoAsset | null> {
     const hlsAsset = await this.videoAssetsRepository.findOne({
       where: {
@@ -105,6 +110,7 @@ export class VideosService {
     return hlsAsset;
   }
 
+  /** Формирует stream-информацию для обычного видео или master HLS плейлиста. */
   async getStreamInfo(
     videoId: number,
     rangeHeader?: string,
@@ -158,6 +164,7 @@ export class VideosService {
     return streamInfo;
   }
 
+  /** Создает файловый stream с optional byte-range. */
   createFileStream(
     filePath: string,
     start?: number,
@@ -169,6 +176,7 @@ export class VideosService {
     return fs.createReadStream(filePath);
   }
 
+  /** Формирует stream-информацию для конкретного HLS файла (m3u8/ts). */
   async getHLSStreamInfo(
     videoId: number,
     fileRequest: string,
@@ -224,6 +232,7 @@ export class VideosService {
     return hlsStreamInfo;
   }
 
+  /** Определяет, обрабатывать запрос как HLS или как обычный video-stream. */
   async getStreamRequestInfo(
     videoId: number,
     url: string,
@@ -249,6 +258,7 @@ export class VideosService {
     return { isHLS: true, fileRequest };
   }
 
+  /** Создает видео, сохраняет исходный asset и запускает асинхронную HLS-конвертацию. */
   async createVideoWithAsset(
     file: Express.Multer.File,
     createVideoDto: CreateVideoDto,

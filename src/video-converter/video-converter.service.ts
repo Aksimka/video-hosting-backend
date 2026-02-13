@@ -48,6 +48,7 @@ export class VideoConverterService {
     }
   }
 
+  /** Конвертирует исходный файл в HLS и обновляет статусы video assets. */
   async convertToHLS(
     videoId: number,
     sourceFilePath: string,
@@ -178,6 +179,7 @@ export class VideoConverterService {
     }
   }
 
+  /** Запускает FFmpeg-пайплайн для генерации master/variant HLS плейлистов и сегментов. */
   private async convertVideoToHLS(
     sourceFilePath: string,
     hlsDir: string,
