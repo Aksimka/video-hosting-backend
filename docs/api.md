@@ -29,6 +29,7 @@ Response:
 Response включает:
 - title/description/duration
 - player/direct/trailer/timeline URLs
+- `models[]` (канонические модели видео)
 - publishedAt, site, pageUrl
 
 Важно:

@@ -4,9 +4,9 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { VideosModule } from './videos/videos.module';
-import { VideoAssetsModule } from './videoAssets/videoAssets.module';
-import { VideoProxyModule } from './video-proxy/video-proxy.module';
+// import { VideosModule } from './videos/videos.module';
+// import { VideoAssetsModule } from './videoAssets/videoAssets.module';
+// import { VideoProxyModule } from './video-proxy/video-proxy.module';
 import { VideoParserModule } from './video-parser/video-parser.module';
 import { databaseConfig } from './database/database.config';
 import { tagsDatabaseConfig } from './database/tags-database.config';
@@ -20,9 +20,9 @@ import { TagGovernanceModule } from './tag-governance/tag-governance.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
-    VideosModule,
-    VideoAssetsModule,
-    VideoProxyModule,
+    // VideosModule,
+    // VideoAssetsModule,
+    // VideoProxyModule,
     VideoParserModule,
     PublishedVideosModule,
     PublicVideosModule,

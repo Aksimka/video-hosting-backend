@@ -274,10 +274,10 @@ export class SexStudentkiVideoParserStrategy implements IVideoParserStrategy {
     const uniqueMap = new Map<string, ParsedModelData>();
 
     const modelRegex =
-      /<a class="tag-modifier" href="([^"]+)"[^>]*>[\s\S]*?<span itemprop="name">([^<]+)<\/span>/g;
+      /<a[^>]*class="[^"]*\btag-modifier\b[^"]*"[^>]*href="([^"]+)"[^>]*>[\s\S]*?<span[^>]*itemprop="actor"[^>]*>[\s\S]*?<span[^>]*itemprop="name"[^>]*>([^<]+)<\/span>/gi;
 
     for (const modelMatch of html.matchAll(modelRegex)) {
-      const slug = this.extractSlug(modelMatch[1]);
+      const slug = this.extractModelSlug(modelMatch[1]);
       const name = this.cleanText(modelMatch[2]);
       if (!name || !slug) {
         continue;
@@ -293,6 +293,29 @@ export class SexStudentkiVideoParserStrategy implements IVideoParserStrategy {
 
     models.push(...uniqueMap.values());
     return models;
+  }
+
+  private extractModelSlug(href: string): string {
+    const fullSlug = this.extractSlug(href);
+    if (!fullSlug) {
+      return '';
+    }
+
+    const segments = fullSlug
+      .split('/')
+      .filter((segment) => segment.length > 0);
+    if (segments.length === 0) {
+      return '';
+    }
+
+    if (segments.length >= 2) {
+      const root = segments[0].toLowerCase();
+      if (root === 'модель' || root === 'model' || root === 'models') {
+        return segments.slice(1).join('/');
+      }
+    }
+
+    return segments.join('/');
   }
 
   private extractSlug(href: string): string {
