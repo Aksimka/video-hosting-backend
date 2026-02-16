@@ -15,7 +15,7 @@ import { ParseVideoPageDto } from './dto/parse-video-page.dto';
 import { ParsedVideosPublicationState } from './enums/parsed-videos-publication-state.enum';
 import { ListParsedVideosDto } from './dto/list-parsed-videos.dto';
 
-@Controller('video-parser')
+@Controller('admin/video-parser')
 export class VideoParserController {
   constructor(private readonly videoParserService: VideoParserService) {}
 
