@@ -12,6 +12,8 @@ import {
 import { VideoParserService } from './video-parser.service';
 import { ParseCategoryDto } from './dto/parse-category.dto';
 import { ParseVideoPageDto } from './dto/parse-video-page.dto';
+import { ParsedVideosPublicationState } from './enums/parsed-videos-publication-state.enum';
+import { ListParsedVideosDto } from './dto/list-parsed-videos.dto';
 
 @Controller('video-parser')
 export class VideoParserController {
@@ -47,13 +49,12 @@ export class VideoParserController {
    * Возвращает список успешно распарсенных видео (с источниками).
    */
   @Get('parsed-videos')
-  async getParsedVideos(
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-  ) {
-    const parsedLimit = limit ? parseInt(limit, 10) : 50;
-    const parsedOffset = offset ? parseInt(offset, 10) : 0;
-    return this.videoParserService.findParsedVideos(parsedLimit, parsedOffset);
+  async getParsedVideos(@Query() query: ListParsedVideosDto) {
+    return this.videoParserService.findParsedVideos(
+      query.limit ?? 50,
+      query.offset ?? 0,
+      query.publicationState ?? ParsedVideosPublicationState.UNPUBLISHED,
+    );
   }
 
   /**

@@ -49,6 +49,15 @@ Response включает:
 
 Назначение: список распарсенных видео.
 
+Query params:
+- `limit` (optional)
+- `offset` (optional)
+- `publicationState` (optional): `unpublished` | `published` | `all`
+
+Семантика:
+- по умолчанию `publicationState=unpublished` — отдаются только `parsed_videos.status=parsed`.
+- при `publicationState=published` — отдаются только `parsed_videos.status=published`.
+
 ### `GET /video-parser/parsed-videos/:id`
 
 Назначение: детальная карточка распарсенного видео для админки.

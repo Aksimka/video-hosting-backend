@@ -28,6 +28,8 @@ import {
 } from './interfaces/parsed-video-data.interface';
 import { SexStudentkiVideoParserStrategy } from './strategies/sex-studentki-video-parser.strategy';
 import { ParserVideoSite } from './enums/parser-video-site.enum';
+import { ParsedVideoStatus } from './enums/parsed-video-status.enum';
+import { ParsedVideosPublicationState } from './enums/parsed-videos-publication-state.enum';
 
 @Injectable()
 export class VideoParserService {
@@ -218,13 +220,30 @@ export class VideoParserService {
     };
   }
 
-  /** Возвращает список parsed-видео для админской выборки. */
-  async findParsedVideos(limit = 50, offset = 0): Promise<ParsedVideo[]> {
+  /** Возвращает список parsed-видео с фильтрацией по факту публикации. */
+  async findParsedVideos(
+    limit = 50,
+    offset = 0,
+    publicationState: ParsedVideosPublicationState = ParsedVideosPublicationState.UNPUBLISHED,
+  ): Promise<ParsedVideo[]> {
+    const parsedLimit = Math.max(1, Math.min(limit, 200));
+    const parsedOffset = Math.max(0, offset);
+    const where =
+      publicationState === ParsedVideosPublicationState.ALL
+        ? undefined
+        : {
+            status:
+              publicationState === ParsedVideosPublicationState.PUBLISHED
+                ? ParsedVideoStatus.PUBLISHED
+                : ParsedVideoStatus.PARSED,
+          };
+
     return this.parsedVideoRepository.find({
+      where,
       relations: ['sources'],
       order: { updated_at: 'DESC' },
-      take: Math.max(1, Math.min(limit, 200)),
-      skip: Math.max(0, offset),
+      take: parsedLimit,
+      skip: parsedOffset,
     });
   }
 
@@ -521,6 +540,9 @@ export class VideoParserService {
     video.direct_video_expires_at = parsedVideo.directVideoExpiresAt || null;
     video.last_checked_at = new Date();
     video.needs_refresh = !parsedVideo.directVideoUrl;
+    if (!video.status) {
+      video.status = ParsedVideoStatus.PARSED;
+    }
 
     const savedVideo = await this.parsedVideoRepository.save(video);
 

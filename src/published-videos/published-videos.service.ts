@@ -13,6 +13,7 @@ import { ParsedVideoSource } from 'src/video-parser/entities/parsed-video-source
 import { ParserVideoSourceType } from 'src/video-parser/enums/parser-video-source-type.enum';
 import { PublishedVideoStatus } from './enums/published-video-status.enum';
 import { TagGovernanceService } from 'src/tag-governance/tag-governance.service';
+import { ParsedVideoStatus } from 'src/video-parser/enums/parsed-video-status.enum';
 
 @Injectable()
 export class PublishedVideosService {
@@ -53,7 +54,14 @@ export class PublishedVideosService {
       publishedVideo.published_by = dto.publishedBy;
     }
 
-    return this.publishedVideosRepository.save(publishedVideo);
+    const savedPublishedVideo =
+      await this.publishedVideosRepository.save(publishedVideo);
+    await this.setParsedVideoStatus(
+      parsedVideo.id,
+      ParsedVideoStatus.PUBLISHED,
+    );
+
+    return savedPublishedVideo;
   }
 
   /** Возвращает список опубликованных сущностей, опционально по статусу. */
@@ -123,14 +131,29 @@ export class PublishedVideosService {
       video.published_by = dto.publishedBy;
     }
 
-    return this.publishedVideosRepository.save(video);
+    const savedVideo = await this.publishedVideosRepository.save(video);
+    if (dto.status !== undefined) {
+      await this.setParsedVideoStatus(
+        savedVideo.parsed_video_id,
+        savedVideo.status === PublishedVideoStatus.PUBLISHED
+          ? ParsedVideoStatus.PUBLISHED
+          : ParsedVideoStatus.PARSED,
+      );
+    }
+
+    return savedVideo;
   }
 
   /** Переводит опубликованное видео в скрытый статус. */
   async hide(id: number): Promise<PublishedVideo> {
     const video = await this.findOne(id);
     video.status = PublishedVideoStatus.HIDDEN;
-    return this.publishedVideosRepository.save(video);
+    const savedVideo = await this.publishedVideosRepository.save(video);
+    await this.setParsedVideoStatus(
+      savedVideo.parsed_video_id,
+      ParsedVideoStatus.PARSED,
+    );
+    return savedVideo;
   }
 
   /** Пересобирает snapshot опубликованного видео из текущего parsed состояния. */
@@ -222,5 +245,13 @@ export class PublishedVideosService {
     if (dto.description !== undefined) {
       target.description = dto.description;
     }
+  }
+
+  /** Обновляет статус parsed-video при изменении жизненного цикла публикации. */
+  private async setParsedVideoStatus(
+    parsedVideoId: number,
+    status: ParsedVideoStatus,
+  ): Promise<void> {
+    await this.parsedVideosRepository.update({ id: parsedVideoId }, { status });
   }
 }

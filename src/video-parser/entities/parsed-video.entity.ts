@@ -9,11 +9,13 @@ import {
 } from 'typeorm';
 import { ParserVideoSite } from '../enums/parser-video-site.enum';
 import { ParsedVideoSource } from './parsed-video-source.entity';
+import { ParsedVideoStatus } from '../enums/parsed-video-status.enum';
 
 @Entity({ name: 'parsed_videos' })
 @Index(['site', 'page_url'], { unique: true })
 @Index(['site', 'page_slug_id'])
 @Index(['site', 'media_id'])
+@Index(['status', 'updated_at'])
 export class ParsedVideo {
   @PrimaryGeneratedColumn()
   id: number;
@@ -68,6 +70,9 @@ export class ParsedVideo {
 
   @Column({ default: false })
   needs_refresh: boolean;
+
+  @Column({ enum: ParsedVideoStatus, default: ParsedVideoStatus.PARSED })
+  status: ParsedVideoStatus;
 
   @CreateDateColumn({ type: 'timestamp' })
   created_at: Date;

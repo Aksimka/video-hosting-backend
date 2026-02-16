@@ -10,6 +10,7 @@ Last updated: 2026-02-13
 - API-контракты: `docs/api.md`
 - Техническая архитектура: `docs/tech.md`
 - Операционная документация: `docs/ops.md`
+- Код-стайл: `docs/code-style.md`
 
 ## Quick Start
 
