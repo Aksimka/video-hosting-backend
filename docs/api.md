@@ -1,12 +1,12 @@
 # API Контракты
 
-Last updated: 2026-02-13
+Last updated: 2026-02-16
 
 ## Общие правила
 
 - Формат: JSON over HTTP.
 - Публичный префикс: `/public/...`
-- Админские префиксы: `/admin/...`, `/video-parser/...`
+- Админские префиксы: `/admin/...`
 
 ## Public API
 
@@ -37,15 +37,15 @@ Response включает:
 
 ## Admin: Parser
 
-### `POST /video-parser/categories/parse`
+### `POST /admin/video-parser/categories/parse`
 
 Назначение: распарсить категорию (опционально с гидрацией видео-страниц).
 
-### `POST /video-parser/videos/parse`
+### `POST /admin/video-parser/videos/parse`
 
 Назначение: распарсить конкретную страницу видео и сохранить в БД.
 
-### `GET /video-parser/parsed-videos`
+### `GET /admin/video-parser/parsed-videos`
 
 Назначение: список распарсенных видео.
 
@@ -58,19 +58,19 @@ Query params:
 - по умолчанию `publicationState=unpublished` — отдаются только `parsed_videos.status=parsed`.
 - при `publicationState=published` — отдаются только `parsed_videos.status=published`.
 
-### `GET /video-parser/parsed-videos/:id`
+### `GET /admin/video-parser/parsed-videos/:id`
 
 Назначение: детальная карточка распарсенного видео для админки.
 
-### `GET /video-parser/videos/:id/playable`
+### `GET /admin/video-parser/videos/:id/playable`
 
 Назначение: получить рабочую direct-ссылку; при необходимости обновить on-demand.
 
-### `POST /video-parser/videos/:id/refresh`
+### `POST /admin/video-parser/videos/:id/refresh`
 
 Назначение: ручное обновление источников видео.
 
-### `POST /video-parser/videos/refresh-expiring`
+### `POST /admin/video-parser/videos/refresh-expiring`
 
 Назначение: батч-обновление протухающих direct-ссылок.
 
