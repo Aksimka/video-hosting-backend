@@ -46,6 +46,7 @@ export class PublishedVideosService {
       });
 
     this.applySnapshot(publishedVideo, parsedVideo, playerSource, directSource);
+    this.applyCreateOverrides(publishedVideo, dto);
     publishedVideo.status = PublishedVideoStatus.PUBLISHED;
     publishedVideo.published_at = publishedVideo.published_at || new Date();
     if (dto.publishedBy !== undefined) {
@@ -208,5 +209,18 @@ export class PublishedVideosService {
     target.trailer_webm_url = parsedVideo.trailer_webm_url;
     target.timeline_sprite_template_url =
       parsedVideo.timeline_sprite_template_url;
+  }
+
+  /** Применяет редактируемые значения формы публикации поверх snapshot-данных. */
+  private applyCreateOverrides(
+    target: PublishedVideo,
+    dto: CreatePublishedVideoDto,
+  ): void {
+    if (dto.title !== undefined) {
+      target.title = dto.title;
+    }
+    if (dto.description !== undefined) {
+      target.description = dto.description;
+    }
   }
 }
