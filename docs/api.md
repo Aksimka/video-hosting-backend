@@ -35,6 +35,34 @@ Response включает:
 - endpoint возвращает только `status=published`.
 - внутренние raw/governance поля в публичный ответ не попадают.
 
+## Internal: Public Feed Sync
+
+### `GET /internal/public-feed`
+
+Назначение: инкрементальный фид изменений для отдельного public-контура (репликация read-model).
+
+Query params:
+- `limit` (optional, default `100`, max `500`)
+- `cursor` (optional, base64url-курсор из предыдущего ответа)
+
+Response:
+- `items[]`:
+  - `operation`: `upsert` | `delete`
+  - `entityId`: id записи `published_videos`
+  - `cursor`: `{ updatedAt, id }`
+  - `payload`: snapshot полей видео для public read-model (только для `upsert`, иначе `null`)
+- `nextCursor`: строка для следующего запроса или `null`
+- `hasMore`: есть ли следующая страница изменений
+- `limit`: фактический лимит ответа
+
+Семантика:
+- `upsert`: запись в `published_videos` имеет `status=published`, public-контур должен создать/обновить видео.
+- `delete`: запись имеет не-публичный статус (`hidden` и т.п.), public-контур должен удалить/скрыть видео у себя.
+
+Текущая защита:
+- Заголовок `x-internal-sync-token` поддерживается.
+- Если `INTERNAL_SYNC_TOKEN` пустой, endpoint открыт (временный мок, TODO закрыть в production).
+
 ## Admin: Parser
 
 ### `POST /admin/video-parser/categories/parse`

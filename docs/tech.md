@@ -1,6 +1,6 @@
 # Техническая Архитектура
 
-Last updated: 2026-02-13
+Last updated: 2026-02-16
 
 ## Модульная структура
 
@@ -9,6 +9,12 @@ Last updated: 2026-02-13
 - `published-videos` — админская проекция опубликованных видео (snapshot для выдачи).
 - `public-videos` — публичная read-only выдача `status=published`.
 - `videos`, `video-proxy`, `videoAssets` — legacy/вспомогательные модули.
+
+## Контуры системы
+
+- Control plane (админ): `admin/video-parser`, `admin/published-videos`, `admin/tag-governance`.
+- Public read plane: `public/videos`.
+- Internal sync plane: `internal/public-feed` для передачи изменений в отдельный public-бэкенд.
 
 ## Принцип унификации
 
@@ -41,9 +47,23 @@ Last updated: 2026-02-13
 
 ### Publish -> Public Read
 
-1. `public-videos` читает только `published_videos`.
-2. Фильтрация по `status=published`.
-3. Клиенту отдаются только публичные поля карточки видео.
+1. В core-модуле `published-videos` формируется инкрементальный фид `GET /internal/public-feed`.
+2. Public-контур периодически забирает изменения курсором (`updated_at`, `id`) и строит локальную read-model.
+3. `public-videos` отдает данные только из локальной public read-model и только для `status=published`.
+4. Для non-published статусов в фиде передается операция `delete`.
+
+## Internal Feed Contract
+
+- `operation=upsert` содержит полный snapshot публичных полей.
+- `operation=delete` содержит только `entityId`, `payload=null`.
+- Cursor кодируется в base64url (`{ updatedAt, id }`).
+- Мок-защита: заголовок `x-internal-sync-token`, управляется `INTERNAL_SYNC_TOKEN` (TODO: сделать обязательным в production).
+
+## Типы и контракты
+
+- Типы internal public feed вынесены в отдельный файл:
+  - `src/published-videos/types/public-feed.types.ts`
+- Правило: для модульных API-контрактов не хранить крупные `type`-блоки внутри `.service`.
 
 ## Протухание direct-ссылок
 
