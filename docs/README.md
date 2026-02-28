@@ -1,7 +1,10 @@
 # Документация
 
-Last updated: 2026-02-13
+Last updated: 2026-02-16
 
+- `prd.md` — продуктовая цель, роли, scope и ключевые сценарии
+- `system-overview.md` — карта модулей, data flow и source of truth
+- `domain-rules.md` — инварианты предметной области и архитектурные правила
 - `business.md` — бизнес-процессы и роли
 - `api.md` — API-контракты
 - `tech.md` — модульная и data-архитектура

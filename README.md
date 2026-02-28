@@ -2,11 +2,14 @@
 
 Backend для админского парсинга видео из внешних источников и публичной выдачи опубликованных видео.
 
-Last updated: 2026-02-13
+Last updated: 2026-02-16
 
 ## Documentation
 
 - Бизнес-процессы: `docs/business.md`
+- Product requirements: `docs/prd.md`
+- Обзор системы: `docs/system-overview.md`
+- Доменные правила: `docs/domain-rules.md`
 - API-контракты: `docs/api.md`
 - Техническая архитектура: `docs/tech.md`
 - Операционная документация: `docs/ops.md`
