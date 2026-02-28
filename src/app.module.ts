@@ -11,7 +11,6 @@ import { VideoParserModule } from './video-parser/video-parser.module';
 import { databaseConfig } from './database/database.config';
 import { tagsDatabaseConfig } from './database/tags-database.config';
 import { PublishedVideosModule } from './published-videos/published-videos.module';
-import { PublicVideosModule } from './public-videos/public-videos.module';
 import { TagGovernanceModule } from './tag-governance/tag-governance.module';
 import { ExternalModule } from './external/external.module';
 
@@ -26,7 +25,6 @@ import { ExternalModule } from './external/external.module';
     // VideoProxyModule,
     VideoParserModule,
     PublishedVideosModule,
-    PublicVideosModule,
     TagGovernanceModule,
     ExternalModule,
     TypeOrmModule.forRoot(databaseConfig),

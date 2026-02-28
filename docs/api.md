@@ -5,36 +5,8 @@ Last updated: 2026-02-16
 ## Общие правила
 
 - Формат: JSON over HTTP.
-- Публичный префикс: `/public/...`
 - Админские префиксы: `/admin/...`
 - Внешний integration-префикс для public-контура: `/external/...`
-
-## Public API
-
-### `GET /public/videos`
-
-Назначение: список опубликованных видео.
-
-Query params:
-- `limit` (optional)
-- `offset` (optional)
-
-Response:
-- `items[]` (краткие карточки)
-- `total`, `limit`, `offset`
-
-### `GET /public/videos/:id`
-
-Назначение: детальная карточка опубликованного видео.
-
-Response включает:
-- title/description/duration
-- player/direct/trailer/timeline URLs
-- publishedAt, site, pageUrl
-
-Важно:
-- endpoint возвращает только `status=published`.
-- внутренние raw/governance поля в публичный ответ не попадают.
 
 ## External: Public Sync
 
@@ -172,4 +144,4 @@ Query params:
 ## Legacy API
 
 - `/videos/*`, `/video-proxy/*`, `/videoAssets/*` присутствуют в проекте.
-- Текущий основной продуктовый фокус: parser + governance + published + public.
+- Текущий основной продуктовый фокус: parser + governance + published + external.

@@ -1,6 +1,6 @@
 # Video Hosting Backend
 
-Backend для админского парсинга видео из внешних источников и публичной выдачи опубликованных видео.
+Backend для админского парсинга видео из внешних источников, публикации и внешней репликации данных в отдельный public backend.
 
 Last updated: 2026-02-16
 
@@ -35,8 +35,8 @@ npm run start:dev
 ## Scope
 
 - Админские модули: парсинг, governance тегов/моделей, публикация
-- Публичный модуль: только опубликованные видео (`status=published`)
-- Legacy-модуль `videos` остается в проекте, но текущий фокус развития: parser + published + public
+- Внешний integration-слой: `external/*` для отдельного public backend
+- Legacy-модуль `videos` остается в проекте, но текущий фокус развития: parser + published + external
 
 ## Documentation Policy
 

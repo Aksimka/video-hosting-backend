@@ -7,15 +7,14 @@ Last updated: 2026-02-16
 - `video-parser` — стратегии парсинга источников, запись parsed-video и parsed-sources.
 - `tag-governance` — канонизация тегов/моделей, ручной маппинг raw-данных.
 - `published-videos` — админская проекция опубликованных видео (snapshot для выдачи).
-- `public-videos` — публичная read-only выдача `status=published`.
 - `external` — внешний integration-слой для отдельного public-контура.
 - `videos`, `video-proxy`, `videoAssets` — legacy/вспомогательные модули.
 
 ## Контуры системы
 
 - Control plane (админ): `admin/video-parser`, `admin/published-videos`, `admin/tag-governance`.
-- Public read plane: `public/videos`.
 - External sync plane: `external/public-feed`, `external/categories` для передачи данных в отдельный public-бэкенд.
+- Public read plane: отдельный public backend вне этого core-приложения.
 
 ## Принцип унификации
 
@@ -52,7 +51,7 @@ Last updated: 2026-02-16
 2. В `external` модуле агрегируются внешние методы для public-контура.
 3. Public-контур периодически забирает изменения курсором (`updated_at`, `id`) и строит локальную read-model.
 4. Активные категории синхронизируются отдельным snapshot endpoint `GET /external/categories`.
-5. `public-videos` отдает данные только из локальной public read-model и только для `status=published`.
+5. Отдельный public backend отдает данные только из локальной public read-model и только для `status=published`.
 6. Для non-published статусов в фиде передается операция `delete`.
 
 ## Internal Feed Contract
@@ -77,4 +76,4 @@ Last updated: 2026-02-16
 
 - `video-parser` не решает, что публиковать.
 - `published-videos` не занимается парсингом HTML.
-- `public-videos` не знает про governance и raw-слой.
+- `external` не должен раскрывать raw/governance детали наружу.
