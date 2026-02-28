@@ -16,7 +16,7 @@ Last updated: 2026-02-16
 - `PORT`
 - `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE`, `DB_SYNCHRONIZE`
 - `TAGS_DB_HOST`, `TAGS_DB_PORT`, `TAGS_DB_USERNAME`, `TAGS_DB_PASSWORD`, `TAGS_DB_DATABASE`, `TAGS_DB_SYNCHRONIZE`
-- `INTERNAL_SYNC_TOKEN` (токен для `GET /internal/public-feed`; при пустом значении endpoint временно открыт)
+- `INTERNAL_SYNC_TOKEN` (токен для `GET /external/public-feed` и `GET /external/categories`; при пустом значении endpoints временно открыты)
 
 ## Локальный запуск
 
@@ -56,7 +56,7 @@ npm run test
 
 Проверь:
 
-1. Public sync-воркер вызывает `GET /internal/public-feed` с корректным `cursor`.
+1. Public sync-воркер вызывает `GET /external/public-feed` с корректным `cursor`.
 2. Если включен `INTERNAL_SYNC_TOKEN`, заголовок `x-internal-sync-token` передаётся и совпадает.
 3. Воркер применяет `operation=upsert|delete` идемпотентно и сохраняет `nextCursor`.
 

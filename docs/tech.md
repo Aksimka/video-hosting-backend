@@ -8,13 +8,14 @@ Last updated: 2026-02-16
 - `tag-governance` — канонизация тегов/моделей, ручной маппинг raw-данных.
 - `published-videos` — админская проекция опубликованных видео (snapshot для выдачи).
 - `public-videos` — публичная read-only выдача `status=published`.
+- `external` — внешний integration-слой для отдельного public-контура.
 - `videos`, `video-proxy`, `videoAssets` — legacy/вспомогательные модули.
 
 ## Контуры системы
 
 - Control plane (админ): `admin/video-parser`, `admin/published-videos`, `admin/tag-governance`.
 - Public read plane: `public/videos`.
-- Internal sync plane: `internal/public-feed` для передачи изменений в отдельный public-бэкенд.
+- External sync plane: `external/public-feed`, `external/categories` для передачи данных в отдельный public-бэкенд.
 
 ## Принцип унификации
 
@@ -47,10 +48,12 @@ Last updated: 2026-02-16
 
 ### Publish -> Public Read
 
-1. В core-модуле `published-videos` формируется инкрементальный фид `GET /internal/public-feed`.
-2. Public-контур периодически забирает изменения курсором (`updated_at`, `id`) и строит локальную read-model.
-3. `public-videos` отдает данные только из локальной public read-model и только для `status=published`.
-4. Для non-published статусов в фиде передается операция `delete`.
+1. В `external` модуле формируется инкрементальный фид `GET /external/public-feed`.
+2. В `external` модуле агрегируются внешние методы для public-контура.
+3. Public-контур периодически забирает изменения курсором (`updated_at`, `id`) и строит локальную read-model.
+4. Активные категории синхронизируются отдельным snapshot endpoint `GET /external/categories`.
+5. `public-videos` отдает данные только из локальной public read-model и только для `status=published`.
+6. Для non-published статусов в фиде передается операция `delete`.
 
 ## Internal Feed Contract
 
@@ -61,8 +64,8 @@ Last updated: 2026-02-16
 
 ## Типы и контракты
 
-- Типы internal public feed вынесены в отдельный файл:
-  - `src/published-videos/types/public-feed.types.ts`
+- Типы public feed вынесены в отдельный файл:
+  - `src/external/types/public-feed.types.ts`
 - Правило: для модульных API-контрактов не хранить крупные `type`-блоки внутри `.service`.
 
 ## Протухание direct-ссылок

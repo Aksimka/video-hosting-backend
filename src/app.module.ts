@@ -13,6 +13,7 @@ import { tagsDatabaseConfig } from './database/tags-database.config';
 import { PublishedVideosModule } from './published-videos/published-videos.module';
 import { PublicVideosModule } from './public-videos/public-videos.module';
 import { TagGovernanceModule } from './tag-governance/tag-governance.module';
+import { ExternalModule } from './external/external.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { TagGovernanceModule } from './tag-governance/tag-governance.module';
     PublishedVideosModule,
     PublicVideosModule,
     TagGovernanceModule,
+    ExternalModule,
     TypeOrmModule.forRoot(databaseConfig),
     TypeOrmModule.forRoot(tagsDatabaseConfig),
   ],

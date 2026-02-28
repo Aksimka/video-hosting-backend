@@ -7,6 +7,7 @@ Last updated: 2026-02-16
 - Формат: JSON over HTTP.
 - Публичный префикс: `/public/...`
 - Админские префиксы: `/admin/...`
+- Внешний integration-префикс для public-контура: `/external/...`
 
 ## Public API
 
@@ -35,9 +36,9 @@ Response включает:
 - endpoint возвращает только `status=published`.
 - внутренние raw/governance поля в публичный ответ не попадают.
 
-## Internal: Public Feed Sync
+## External: Public Sync
 
-### `GET /internal/public-feed`
+### `GET /external/public-feed`
 
 Назначение: инкрементальный фид изменений для отдельного public-контура (репликация read-model).
 
@@ -62,6 +63,22 @@ Response:
 Текущая защита:
 - Заголовок `x-internal-sync-token` поддерживается.
 - Если `INTERNAL_SYNC_TOKEN` пустой, endpoint открыт (временный мок, TODO закрыть в production).
+
+### `GET /external/categories`
+
+Назначение: полный snapshot активных категорий для public-контура.
+
+Response:
+- `items` не оборачиваются, endpoint возвращает массив категорий
+- каждый элемент содержит:
+  - `id`
+  - `name`
+  - `slug`
+  - `updatedAt`
+
+Семантика:
+- наружу отдаются только категории с `is_active=true`
+- неактивные категории public-контур должен удалять/скрывать у себя при очередном sync
 
 ## Admin: Parser
 
