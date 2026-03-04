@@ -81,6 +81,7 @@ export class ExternalService {
       id: category.id,
       name: category.name,
       slug: category.slug,
+      previewUrl: category.preview_url,
       updatedAt: category.updated_at,
     }));
   }

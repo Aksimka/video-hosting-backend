@@ -623,6 +623,7 @@ export class TagGovernanceService {
     const category = this.categoryRepository.create({
       name: dto.name.trim(),
       slug,
+      preview_url: dto.previewUrl?.trim() || null,
       match_mode: dto.matchMode || CategoryMatchMode.ANY,
       is_active: dto.isActive ?? true,
     });
@@ -691,6 +692,10 @@ export class TagGovernanceService {
         );
       }
       category.slug = slug;
+    }
+
+    if (dto.previewUrl !== undefined) {
+      category.preview_url = dto.previewUrl?.trim() || null;
     }
 
     if (dto.matchMode !== undefined) {

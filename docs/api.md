@@ -1,6 +1,6 @@
 # API Контракты
 
-Last updated: 2026-02-16
+Last updated: 2026-03-04
 
 ## Общие правила
 
@@ -46,6 +46,7 @@ Response:
   - `id`
   - `name`
   - `slug`
+  - `previewUrl`
   - `updatedAt`
 
 Семантика:

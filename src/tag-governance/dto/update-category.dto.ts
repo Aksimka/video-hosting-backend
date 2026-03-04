@@ -23,6 +23,11 @@ export class UpdateCategoryDto {
   slug?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  previewUrl?: string | null;
+
+  @IsOptional()
   @IsEnum(CategoryMatchMode)
   matchMode?: CategoryMatchMode;
 

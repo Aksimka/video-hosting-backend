@@ -21,6 +21,9 @@ export class Category {
   @Column({ type: 'varchar', length: 256 })
   slug: string;
 
+  @Column({ type: 'text', nullable: true })
+  preview_url: string | null;
+
   @Column({ enum: CategoryMatchMode, default: CategoryMatchMode.ANY })
   match_mode: CategoryMatchMode;
 

@@ -168,6 +168,7 @@ describe('ExternalService', () => {
         id: 10,
         name: 'Category',
         slug: 'category',
+        preview_url: 'https://example.com/category.jpg',
         updated_at: updatedAt,
       },
     ]);
@@ -183,6 +184,7 @@ describe('ExternalService', () => {
         id: 10,
         name: 'Category',
         slug: 'category',
+        previewUrl: 'https://example.com/category.jpg',
         updatedAt,
       },
     ]);
